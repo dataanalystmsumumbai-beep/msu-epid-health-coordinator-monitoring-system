@@ -1,37 +1,41 @@
 import gspread
+
 from database.database import connect_database
+from config.config import SHEET_NAME
 
 
-def get_spreadsheet(sheet_name: str):
-    """
-    Connect to Google Spreadsheet.
-    Create Spreadsheet if it does not exist.
-    """
+def get_database():
 
     client = connect_database()
 
-    try:
-        spreadsheet = client.open(sheet_name)
-
-    except gspread.SpreadsheetNotFound:
-        spreadsheet = client.create(sheet_name)
+    spreadsheet = client.open(SHEET_NAME)
 
     return spreadsheet
 
 
-def get_or_create_worksheet(spreadsheet, worksheet_name, headers):
+def get_sheet(sheet_name):
 
-    try:
-        worksheet = spreadsheet.worksheet(worksheet_name)
+    spreadsheet = get_database()
 
-    except gspread.WorksheetNotFound:
+    return spreadsheet.worksheet(sheet_name)
 
-        worksheet = spreadsheet.add_worksheet(
-            title=worksheet_name,
-            rows=1000,
-            cols=max(len(headers), 20)
-        )
 
-        worksheet.append_row(headers)
+def read_data(sheet_name):
 
-    return worksheet
+    sheet = get_sheet(sheet_name)
+
+    return sheet.get_all_records()
+
+
+def append_row(sheet_name, row):
+
+    sheet = get_sheet(sheet_name)
+
+    sheet.append_row(row)
+
+
+def update_cell(sheet_name, row, column, value):
+
+    sheet = get_sheet(sheet_name)
+
+    sheet.update_cell(row, column, value)
