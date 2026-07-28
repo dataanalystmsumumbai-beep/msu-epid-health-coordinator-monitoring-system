@@ -3,13 +3,14 @@ import gspread
 from config.config import get_google_credentials
 
 
-def connect_database():
-    """
-    Connect to Google Spreadsheet
-    """
+class Database:
 
-    credentials = get_google_credentials()
+    def __init__(self):
 
-    client = gspread.authorize(credentials)
+        credentials = get_google_credentials()
 
-    return client
+        self.client = gspread.authorize(credentials)
+
+    def spreadsheet(self, spreadsheet_name):
+
+        return self.client.open(spreadsheet_name)
