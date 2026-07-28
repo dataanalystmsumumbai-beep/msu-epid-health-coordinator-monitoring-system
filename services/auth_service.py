@@ -1,24 +1,19 @@
 from utils.google_sheet import read_all
 
-
 USER_MASTER = "01_User_Master"
 
 
-def authenticate(username, password):
+class AuthService:
 
-    users = read_all(USER_MASTER)
+    @staticmethod
+    def get_user(username):
 
-    for user in users:
+        users = read_all(USER_MASTER)
 
-        if str(user["Username"]).strip() != username.strip():
-            continue
+        for user in users:
 
-        if str(user["Password"]).strip() != password.strip():
-            return False, "Wrong Password"
+            if str(user["Username"]).strip().lower() == username.strip().lower():
 
-        if str(user["Status"]).upper() != "ACTIVE":
-            return False, "User Inactive"
+                return user
 
-        return True, user
-
-    return False, "User Not Found"
+        return None
