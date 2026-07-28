@@ -1,3 +1,7 @@
+from services.database_initializer import initialize_database
+
+initialize_database()
+
 import streamlit as st
 
 st.set_page_config(
