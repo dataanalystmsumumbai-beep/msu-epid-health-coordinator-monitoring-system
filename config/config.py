@@ -1,8 +1,19 @@
+import streamlit as st
+from google.oauth2.service_account import Credentials
 
-APP_NAME = "MSU/EPID Health Coordinator Monitoring System"
+# -------------------------------
+# Google Sheet Configuration
+# -------------------------------
 
-VERSION = "3.0 Enterprise"
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive"
+]
 
-DEPARTMENT = "Metropolitan Surveillance Unit (MSU) | Epidemiology Cell (EPID), Mumbai"
+SHEET_NAME = "MSU HCMS Database"
 
-GOOGLE_SHEET_URL = ""
+def get_google_credentials():
+    return Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=SCOPES
+    )
