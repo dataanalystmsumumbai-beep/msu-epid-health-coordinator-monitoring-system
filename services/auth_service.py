@@ -1,34 +1,24 @@
-class AuthService:
-
-    def login(
-        self,
-        username,
-        password
-    ):
-
-        pass
+from utils.google_sheet import read_all
 
 
-    def logout(self):
-
-        pass
+USER_MASTER = "01_User_Master"
 
 
-    def validate_user(self):
+def authenticate(username, password):
 
-        pass
+    users = read_all(USER_MASTER)
 
+    for user in users:
 
-    def developer_login(self):
+        if str(user["Username"]).strip() != username.strip():
+            continue
 
-        pass
+        if str(user["Password"]).strip() != password.strip():
+            return False, "Wrong Password"
 
+        if str(user["Status"]).upper() != "ACTIVE":
+            return False, "User Inactive"
 
-    def admin_login(self):
+        return True, user
 
-        pass
-
-
-    def coordinator_login(self):
-
-        pass
+    return False, "User Not Found"
