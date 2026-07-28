@@ -1,41 +1,45 @@
-import gspread
-
-from database.database import connect_database
+from database.database import Database
 from config.config import SHEET_NAME
 
 
-def get_database():
-
-    client = connect_database()
-
-    spreadsheet = client.open(SHEET_NAME)
-
-    return spreadsheet
+database = Database()
 
 
-def get_sheet(sheet_name):
+def get_spreadsheet():
 
-    spreadsheet = get_database()
+    return database.spreadsheet(SHEET_NAME)
+
+
+def get_worksheet(sheet_name):
+
+    spreadsheet = get_spreadsheet()
 
     return spreadsheet.worksheet(sheet_name)
 
 
-def read_data(sheet_name):
+def read_all(sheet_name):
 
-    sheet = get_sheet(sheet_name)
+    worksheet = get_worksheet(sheet_name)
 
-    return sheet.get_all_records()
-
-
-def append_row(sheet_name, row):
-
-    sheet = get_sheet(sheet_name)
-
-    sheet.append_row(row)
+    return worksheet.get_all_records()
 
 
-def update_cell(sheet_name, row, column, value):
+def insert_row(sheet_name, row):
 
-    sheet = get_sheet(sheet_name)
+    worksheet = get_worksheet(sheet_name)
 
-    sheet.update_cell(row, column, value)
+    worksheet.append_row(row)
+
+
+def update_value(sheet_name, row, col, value):
+
+    worksheet = get_worksheet(sheet_name)
+
+    worksheet.update_cell(row, col, value)
+
+
+def clear_sheet(sheet_name):
+
+    worksheet = get_worksheet(sheet_name)
+
+    worksheet.clear()
