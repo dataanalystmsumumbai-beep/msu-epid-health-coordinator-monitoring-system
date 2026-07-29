@@ -1,4 +1,4 @@
-from utils.google_sheet import read_all, append_row
+from utils.google_sheet import read_all, insert_row
 from config.config import USER_MASTER
 
 import hashlib
