@@ -10,7 +10,7 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-SHEET_NAME = "MSU HCMS Database"
+SHEET_NAME = "MSU-EPID Health Coordinator Monitoring System Database"
 
 
 def get_google_credentials():
