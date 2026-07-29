@@ -1,29 +1,54 @@
-from utils.google_sheet import append_row
-from utils.datetime_utils import current_datetime
+from utils.google_sheet import insert_row
+from datetime import datetime
 
 
-def save_audit_log(
-    user,
-    role,
-    action,
-    details
-):
+AUDIT_SHEET = "07_Audit_Log"
 
-    append_row(
+LOGIN_SHEET = "06_Login_History"
 
-        "05_Audit_Log",
+
+def save_login_history(user):
+
+    insert_row(
+
+        LOGIN_SHEET,
 
         [
 
-            current_datetime(),
+            datetime.now().strftime("%d-%m-%Y"),
 
-            user,
+            datetime.now().strftime("%I:%M:%S %p"),
 
-            role,
+            user["User_ID"],
+
+            user["Username"],
+
+            user["Role"],
+
+            "SUCCESS"
+
+        ]
+
+    )
+
+
+def save_audit(user, action, remarks=""):
+
+    insert_row(
+
+        AUDIT_SHEET,
+
+        [
+
+            datetime.now().strftime("%d-%m-%Y %I:%M:%S %p"),
+
+            user["Username"],
+
+            user["Role"],
 
             action,
 
-            details
+            remarks
 
         ]
 
