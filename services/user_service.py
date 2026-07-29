@@ -57,6 +57,6 @@ class UserService:
             ""
         ]
 
-        append_row(USER_MASTER, row)
+        insert_row(USER_MASTER, row)
 
         return True, "User Created Successfully"
