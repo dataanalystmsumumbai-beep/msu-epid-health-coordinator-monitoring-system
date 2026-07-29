@@ -1,37 +1,81 @@
 import streamlit as st
 
-from core.session import logout
-
-if (
-    "logged_in" not in st.session_state
-    or
-    not st.session_state.logged_in
-):
-
-    st.switch_page("app.py")
-
-if st.session_state.role != "Developer":
-
-    st.error("Access Denied")
-
-    st.stop()
+from services.user_service import UserService
 
 st.title("👨‍💻 Developer Dashboard")
 
-st.write(
-    f"Welcome : {st.session_state.full_name}"
-)
+tab1, tab2 = st.tabs([
+    "📊 Dashboard",
+    "👤 Create User"
+])
 
-st.write(
-    f"Username : {st.session_state.username}"
-)
+with tab1:
 
-st.write(
-    f"Role : {st.session_state.role}"
-)
+    users = UserService.get_all_users()
 
-st.divider()
+    st.metric(
+        "Total Users",
+        len(users)
+    )
 
-if st.button("Logout"):
+    st.dataframe(
+        users,
+        use_container_width=True
+    )
 
-    logout()
+
+with tab2:
+
+    st.subheader("Create New User")
+
+    username = st.text_input("Username")
+
+    password = st.text_input(
+        "Password",
+        type="password"
+    )
+
+    role = st.selectbox(
+        "Role",
+        [
+            "Developer",
+            "Admin",
+            "Coordinator"
+        ]
+    )
+
+    full_name = st.text_input("Full Name")
+
+    designation = st.text_input("Designation")
+
+    mobile = st.text_input("Mobile")
+
+    email = st.text_input("Email")
+
+    if st.button(
+        "Create User",
+        use_container_width=True
+    ):
+
+        status, message = UserService.create_user(
+
+            username=username,
+            password=password,
+            role=role,
+            full_name=full_name,
+            designation=designation,
+            mobile=mobile,
+            email=email,
+            created_by=st.session_state.username
+
+        )
+
+        if status:
+
+            st.success(message)
+
+            st.rerun()
+
+        else:
+
+            st.error(message)
