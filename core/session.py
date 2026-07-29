@@ -1,20 +1,23 @@
 import streamlit as st
 
 
-DEFAULT_SESSION = {
-    "logged_in": False,
-    "user_id": "",
-    "username": "",
-    "name": "",
-    "role": "",
-    "ward": "",
-    "login_time": ""
-}
-
-
 def initialize_session():
 
-    for key, value in DEFAULT_SESSION.items():
+    defaults = {
+
+        "logged_in": False,
+
+        "username": "",
+
+        "role": "",
+
+        "full_name": "",
+
+        "user_id": ""
+
+    }
+
+    for key, value in defaults.items():
 
         if key not in st.session_state:
 
@@ -24,17 +27,18 @@ def initialize_session():
 def login(user):
 
     st.session_state.logged_in = True
-    st.session_state.user_id = user["User_ID"]
+
     st.session_state.username = user["Username"]
-    st.session_state.name = user["Name"]
+
     st.session_state.role = user["Role"]
-    st.session_state.ward = user["Ward"]
+
+    st.session_state.full_name = user["Full_Name"]
+
+    st.session_state.user_id = user["User_ID"]
 
 
 def logout():
 
-    for key, value in DEFAULT_SESSION.items():
-
-        st.session_state[key] = value
+    st.session_state.clear()
 
     st.rerun()
