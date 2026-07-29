@@ -6,7 +6,6 @@ from core.session import (
 )
 
 from services.auth_service import AuthService
-from utils.security import verify_password
 
 # -----------------------------
 # Page Configuration
@@ -30,72 +29,54 @@ if not st.session_state.logged_in:
 
     st.subheader("Login")
 
-    username = st.text_input(
-        "Username"
-    )
+    username = st.text_input("Username")
 
     password = st.text_input(
         "Password",
         type="password"
     )
 
-    login_button = st.button(
+    if st.button(
         "Login",
         use_container_width=True
-    )
+    ):
 
-    if login_button:
+        status, result = AuthService.authenticate(
+            username,
+            password
+        )
 
-        user = AuthService.get_user(username)
+        if status:
 
-        if user is None:
+            login(result)
 
-            st.error("Invalid Username")
+            st.success("Login Successful")
 
-            st.stop()
+            st.rerun()
 
-        if str(user["Status"]).upper() != "ACTIVE":
+        else:
 
-            st.error("Account Disabled")
-
-            st.stop()
-
-        if not verify_password(
-            password,
-            user["Password_Hash"]
-        ):
-
-            st.error("Invalid Password")
+            st.error(result)
 
             st.stop()
-
-        login(user)
-
-        st.rerun()
 
 # -----------------------------
-# Dashboard Redirect
+# Redirect
 # -----------------------------
 
-role = st.session_state.role
-
-st.success(
-    f"Welcome {st.session_state.full_name}"
-)
-
-if role == "Developer":
+if st.session_state.role == "Developer":
 
     st.switch_page(
         "pages/00_Developer_Dashboard.py"
     )
 
-elif role == "Admin":
+elif st.session_state.role == "Admin":
 
     st.switch_page(
         "pages/01_Admin_Dashboard.py"
     )
 
-elif role == "Coordinator":
+elif st.session_state.role == "Coordinator":
 
     st.switch_page(
         "pages/02_Coordinator_Dashboard.py"
