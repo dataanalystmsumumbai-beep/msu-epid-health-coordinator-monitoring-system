@@ -1,30 +1,134 @@
 import streamlit as st
-
 from services.user_service import UserService
+from core.session import logout
 
-st.title("👨‍💻 Developer Dashboard")
+# ------------------------------------------------
+# Page Configuration
+# ------------------------------------------------
 
-tab1, tab2 = st.tabs([
-    "📊 Dashboard",
-    "👤 Create User"
-])
+st.set_page_config(
+    page_title="Developer Dashboard",
+    page_icon="👨‍💻",
+    layout="wide"
+)
 
-with tab1:
+# ------------------------------------------------
+# Sidebar
+# ------------------------------------------------
 
-    users = UserService.get_all_users()
+with st.sidebar:
 
-    st.metric(
-        "Total Users",
-        len(users)
+    st.image(
+        "https://img.icons8.com/color/96/developer.png",
+        width=70
     )
+
+    st.markdown("## 👨‍💻 Developer")
+
+    st.write(f"**User :** {st.session_state.username}")
+
+    st.write(f"**Role :** {st.session_state.role}")
+
+    st.divider()
+
+    if st.button(
+        "🚪 Logout",
+        use_container_width=True
+    ):
+
+        logout()
+
+        st.switch_page("app.py")
+
+# ------------------------------------------------
+# Header
+# ------------------------------------------------
+
+st.title("🏥 MSU / EPID Health Coordinator Monitoring System")
+
+st.caption("Developer Control Panel")
+
+st.divider()
+
+# ------------------------------------------------
+# Dashboard Metrics
+# ------------------------------------------------
+
+users = UserService.get_all_users()
+
+total_users = len(users)
+
+developer_count = len(
+    [u for u in users if u["Role"] == "Developer"]
+)
+
+admin_count = len(
+    [u for u in users if u["Role"] == "Admin"]
+)
+
+coordinator_count = len(
+    [u for u in users if u["Role"] == "Coordinator"]
+)
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(
+        "👥 Total Users",
+        total_users
+    )
+
+with col2:
+    st.metric(
+        "👨‍💻 Developers",
+        developer_count
+    )
+
+with col3:
+    st.metric(
+        "👨‍💼 Admins",
+        admin_count
+    )
+
+with col4:
+    st.metric(
+        "🧑‍⚕️ Coordinators",
+        coordinator_count
+    )
+
+st.divider()
+
+# ------------------------------------------------
+# Tabs
+# ------------------------------------------------
+
+dashboard_tab, create_tab, users_tab = st.tabs(
+    [
+        "📊 Dashboard",
+        "➕ Create User",
+        "👥 User List"
+    ]
+)
+
+# ------------------------------------------------
+# Dashboard
+# ------------------------------------------------
+
+with dashboard_tab:
+
+    st.success("✅ System Running Successfully")
 
     st.dataframe(
         users,
-        use_container_width=True
+        use_container_width=True,
+        hide_index=True
     )
 
+# ------------------------------------------------
+# Create User
+# ------------------------------------------------
 
-with tab2:
+with create_tab:
 
     st.subheader("Create New User")
 
@@ -53,12 +157,11 @@ with tab2:
     email = st.text_input("Email")
 
     if st.button(
-        "Create User",
+        "✅ Create User",
         use_container_width=True
     ):
 
         status, message = UserService.create_user(
-
             username=username,
             password=password,
             role=role,
@@ -67,7 +170,6 @@ with tab2:
             mobile=mobile,
             email=email,
             created_by=st.session_state.username
-
         )
 
         if status:
@@ -79,3 +181,34 @@ with tab2:
         else:
 
             st.error(message)
+
+# ------------------------------------------------
+# User List
+# ------------------------------------------------
+
+with users_tab:
+
+    st.subheader("Existing Users")
+
+    search = st.text_input("🔍 Search User")
+
+    if search:
+
+        filtered = [
+            u for u in users
+            if search.lower() in str(u).lower()
+        ]
+
+        st.dataframe(
+            filtered,
+            use_container_width=True,
+            hide_index=True
+        )
+
+    else:
+
+        st.dataframe(
+            users,
+            use_container_width=True,
+            hide_index=True
+        )
