@@ -21,6 +21,31 @@ def get_google_credentials():
 
 
 # ------------------------------
+# Worksheet Names
+# ------------------------------
+
+USER_MASTER = "01_User_Master"
+
+COORDINATOR_MASTER = "02_Coordinator_Master"
+
+TASK_MASTER = "03_Task_Master"
+
+COORDINATOR_TASK_MAP = "04_Coordinator_Task_Map"
+
+DAILY_REVIEW = "05_Daily_Review"
+
+LOGIN_HISTORY = "06_Login_History"
+
+AUDIT_LOG = "07_Audit_Log"
+
+SYSTEM_SETTINGS = "08_System_Settings"
+
+APP_MANUAL = "09_App_Manual"
+
+NOTIFICATIONS = "10_Notifications"
+
+
+# ------------------------------
 # Application Configuration
 # ------------------------------
 
