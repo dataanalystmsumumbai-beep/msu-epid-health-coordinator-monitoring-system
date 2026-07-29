@@ -1,11 +1,18 @@
-import streamlit as st
+from services.auth_service import AuthService
+from core.session import login as create_session
+
 
 def login(username, password):
-    return False
+    """
+    Authenticate user and create session.
+    Returns:
+        (True, user) on success
+        (False, error_message) on failure
+    """
 
-def logout():
-    if "logged_in" in st.session_state:
-        del st.session_state["logged_in"]
+    status, result = AuthService.authenticate(username, password)
 
-def is_logged_in():
-    return st.session_state.get("logged_in", False)
+    if status:
+        create_session(result)
+
+    return status, result
