@@ -77,6 +77,10 @@ st.caption("Developer Control Panel")
 
 st.divider()
 
+st.write("DEBUG SESSION")
+
+st.json(dict(st.session_state))
+
 # ------------------------------------------------
 # Dashboard Cards
 # ------------------------------------------------
