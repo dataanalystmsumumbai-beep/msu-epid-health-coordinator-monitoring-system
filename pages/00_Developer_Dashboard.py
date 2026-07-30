@@ -1,4 +1,5 @@
 import streamlit as st
+
 from services.user_service import UserService
 from core.session import logout
 
@@ -13,25 +14,45 @@ st.set_page_config(
 )
 
 # ------------------------------------------------
+# Login Check
+# ------------------------------------------------
+
+if "logged_in" not in st.session_state:
+    st.switch_page("app.py")
+    st.stop()
+
+# ------------------------------------------------
+# Load Users
+# ------------------------------------------------
+
+users = UserService.get_all_users()
+
+# ------------------------------------------------
 # Sidebar
 # ------------------------------------------------
 
 with st.sidebar:
 
-    st.image(
-        "https://img.icons8.com/color/96/developer.png",
-        width=70
-    )
-
-    st.markdown("## 👨‍💻 Developer")
+    st.markdown("# 👨‍💻 Developer")
 
     username = st.session_state.get("username", "Guest")
-role = st.session_state.get("role", "Unknown")
+    role = st.session_state.get("role", "Developer")
 
-st.write(f"**User :** {username}")
-st.write(f"**Role :** {role}")
+    st.success("🟢 Online")
 
-        st.divider()
+    st.write(f"**User :** {username}")
+    st.write(f"**Role :** {role}")
+
+    st.divider()
+
+    st.markdown("### Quick Menu")
+
+    st.write("📊 Dashboard")
+    st.write("👤 User Management")
+    st.write("📝 Audit Logs")
+    st.write("⚙️ System Settings")
+
+    st.divider()
 
     if st.button(
         "🚪 Logout",
@@ -40,7 +61,11 @@ st.write(f"**Role :** {role}")
 
         logout()
 
+        st.session_state.clear()
+
         st.switch_page("app.py")
+
+        st.stop()
 
 # ------------------------------------------------
 # Header
@@ -53,10 +78,8 @@ st.caption("Developer Control Panel")
 st.divider()
 
 # ------------------------------------------------
-# Dashboard Metrics
+# Dashboard Cards
 # ------------------------------------------------
-
-users = UserService.get_all_users()
 
 total_users = len(users)
 
@@ -72,27 +95,27 @@ coordinator_count = len(
     [u for u in users if u["Role"] == "Coordinator"]
 )
 
-col1, col2, col3, col4 = st.columns(4)
+c1, c2, c3, c4 = st.columns(4)
 
-with col1:
+with c1:
     st.metric(
         "👥 Total Users",
         total_users
     )
 
-with col2:
+with c2:
     st.metric(
         "👨‍💻 Developers",
         developer_count
     )
 
-with col3:
+with c3:
     st.metric(
         "👨‍💼 Admins",
         admin_count
     )
 
-with col4:
+with c4:
     st.metric(
         "🧑‍⚕️ Coordinators",
         coordinator_count
