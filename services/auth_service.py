@@ -1,3 +1,5 @@
+from config.config import USER_MASTER
+
 from utils.google_sheet import (
     read_all,
     update_value
@@ -10,37 +12,69 @@ from utils.logger import (
     save_audit
 )
 
-USER_MASTER = "01_User_Master"
-
 
 class AuthService:
 
     @staticmethod
     def authenticate(username, password):
 
+        username = username.strip().lower()
+
         users = read_all(USER_MASTER)
 
-        for index, user in enumerate(users, start=2):
+        for row_no, user in enumerate(users, start=2):
 
-            if str(user["Username"]).strip().lower() != username.strip().lower():
+            db_username = str(
+                user.get("Username", "")
+            ).strip().lower()
+
+            if db_username != username:
                 continue
 
-            if str(user["Status"]).upper() != "ACTIVE":
+            # -------------------------
+            # Status Check
+            # -------------------------
+
+            if str(
+                user.get("Status", "ACTIVE")
+            ).upper() != "ACTIVE":
+
                 return False, "Account Disabled"
 
-            if str(user["Account_Locked"]).upper() == "YES":
+            # -------------------------
+            # Locked Check
+            # -------------------------
+
+            if str(
+                user.get("Account_Locked", "NO")
+            ).upper() == "YES":
+
                 return False, "Account Locked"
+
+            # -------------------------
+            # Password Verify
+            # -------------------------
+
+            password_hash = user.get(
+                "Password_Hash",
+                ""
+            )
 
             if not verify_password(
                 password,
-                user["Password_Hash"]
+                password_hash
             ):
 
-                attempts = int(user["Login_Attempts"]) + 1
+                attempts = int(
+                    user.get(
+                        "Login_Attempts",
+                        0
+                    )
+                ) + 1
 
                 update_value(
                     USER_MASTER,
-                    index,
+                    row_no,
                     12,
                     attempts
                 )
@@ -49,7 +83,7 @@ class AuthService:
 
                     update_value(
                         USER_MASTER,
-                        index,
+                        row_no,
                         13,
                         "YES"
                     )
@@ -58,19 +92,27 @@ class AuthService:
 
                 return False, "Invalid Password"
 
+            # -------------------------
+            # Reset Login Attempt
+            # -------------------------
+
             update_value(
                 USER_MASTER,
-                index,
+                row_no,
                 12,
                 0
             )
 
             update_value(
                 USER_MASTER,
-                index,
+                row_no,
                 10,
                 "YES"
             )
+
+            # -------------------------
+            # Log
+            # -------------------------
 
             save_login_history(user)
 
