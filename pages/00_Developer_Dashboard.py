@@ -12,15 +12,24 @@ st.set_page_config(
     page_icon="👨‍💻",
     layout="wide"
 )
-
+st.markdown("""
+<style>
+section[data-testid="stSidebarNav"]{
+    display:none;
+}
+</style>
+""", unsafe_allow_html=True)
 # ------------------------------------------------
 # Login Check
 # ------------------------------------------------
 
-if "logged_in" not in st.session_state:
+if (
+    not st.session_state.get("logged_in", False)
+    or st.session_state.get("role") != "Developer"
+):
+    st.warning("Please login first.")
     st.switch_page("app.py")
     st.stop()
-
 # ------------------------------------------------
 # Load Users
 # ------------------------------------------------
