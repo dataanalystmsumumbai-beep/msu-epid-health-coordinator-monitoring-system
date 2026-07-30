@@ -1,5 +1,7 @@
 import streamlit as st
 
+from core.navigation import redirect_after_login
+
 from core.session import (
     initialize_session,
     login
@@ -64,20 +66,5 @@ if not st.session_state.logged_in:
 # Redirect
 # -----------------------------
 
-if st.session_state.role == "Developer":
-
-    st.switch_page(
-        "pages/00_Developer_Dashboard.py"
-    )
-
-elif st.session_state.role == "Admin":
-
-    st.switch_page(
-        "pages/01_Admin_Dashboard.py"
-    )
-
-elif st.session_state.role == "Coordinator":
-
-    st.switch_page(
-        "pages/02_Coordinator_Dashboard.py"
-    )
+if st.session_state.logged_in:
+    redirect_after_login()
