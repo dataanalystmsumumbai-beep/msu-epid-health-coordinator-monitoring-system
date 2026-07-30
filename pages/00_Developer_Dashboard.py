@@ -1,5 +1,7 @@
 import streamlit as st
 
+from core.navigation import require_login
+
 from services.user_service import UserService
 from core.session import logout
 
@@ -12,6 +14,9 @@ st.set_page_config(
     page_icon="👨‍💻",
     layout="wide"
 )
+
+require_login("Developer")
+
 st.markdown("""
 <style>
 section[data-testid="stSidebarNav"]{
