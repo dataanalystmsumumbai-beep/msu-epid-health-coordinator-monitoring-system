@@ -25,11 +25,13 @@ with st.sidebar:
 
     st.markdown("## 👨‍💻 Developer")
 
-    st.write(f"**User :** {st.session_state.username}")
+    username = st.session_state.get("username", "Guest")
+role = st.session_state.get("role", "Unknown")
 
-    st.write(f"**Role :** {st.session_state.role}")
+st.write(f"**User :** {username}")
+st.write(f"**Role :** {role}")
 
-    st.divider()
+        st.divider()
 
     if st.button(
         "🚪 Logout",
