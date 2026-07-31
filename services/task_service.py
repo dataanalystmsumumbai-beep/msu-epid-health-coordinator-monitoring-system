@@ -290,3 +290,48 @@ class TaskService:
             if task["Status"] == status
 
         ]
+
+# ==========================================
+# Delete Task
+# ==========================================
+
+@staticmethod
+def delete_task(task_id):
+
+    tasks = TaskService.get_all_tasks()
+
+    for task in tasks:
+
+        if task["Task_ID"] == task_id:
+
+            return True
+
+    return False
+
+
+# ==========================================
+# Reassign Coordinator
+# ==========================================
+
+@staticmethod
+def update_assigned_to(
+
+    row_number,
+
+    coordinator
+
+):
+
+    update_value(
+
+        TASK_MASTER,
+
+        row_number,
+
+        4,
+
+        coordinator
+
+    )
+
+    return True
