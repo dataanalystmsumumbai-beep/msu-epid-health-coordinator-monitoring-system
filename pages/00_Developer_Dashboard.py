@@ -39,7 +39,7 @@ if (
 # Load Users
 # ------------------------------------------------
 
-users = []
+users = UserService.get_all_users()
 
 # ------------------------------------------------
 # Sidebar
@@ -99,7 +99,7 @@ st.json(dict(st.session_state))
 # Dashboard Cards
 # ------------------------------------------------
 
-st.success("Dashboard Loaded Successfully")
+
 total_users = len(users)
 
 developer_count = len(
