@@ -41,9 +41,7 @@ if (
 
 users = UserService.get_all_users()
 
-st.write(users)
 
-st.stop()
 
 # ------------------------------------------------
 # Sidebar
