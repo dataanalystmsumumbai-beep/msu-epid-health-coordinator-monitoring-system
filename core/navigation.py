@@ -10,13 +10,28 @@ def require_login(required_role=None):
         st.switch_page("app.py")
         st.stop()
 
-    if required_role:
+if required_role:
 
-        current_role = st.session_state.get("role", "")
+    current_role = st.session_state.get("role", "")
+
+    if isinstance(required_role, list):
+
+        if current_role not in required_role:
+
+            st.error("⛔ Unauthorized Access")
+
+            st.switch_page("app.py")
+
+            st.stop()
+
+    else:
 
         if current_role != required_role:
+
             st.error("⛔ Unauthorized Access")
+
             st.switch_page("app.py")
+
             st.stop()
 
 
