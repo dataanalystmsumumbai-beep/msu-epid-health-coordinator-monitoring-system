@@ -1,70 +1,68 @@
 import streamlit as st
 
-from core.navigation import redirect_after_login
-
 from core.session import (
     initialize_session,
     login
 )
 
+from core.navigation import redirect_after_login
 from services.auth_service import AuthService
 
-# -----------------------------
+# ======================================================
 # Page Configuration
-# -----------------------------
+# ======================================================
 
 st.set_page_config(
-    page_title="MSU/EPID Health Coordinator Monitoring System",
+    page_title="MSU / EPID Health Coordinator Monitoring System",
     page_icon="🏥",
     layout="wide"
 )
 
+# ======================================================
+# Initialize Session
+# ======================================================
+
 initialize_session()
 
-# -----------------------------
+# ======================================================
+# Redirect if Already Logged In
+# ======================================================
+
+if st.session_state.get("logged_in", False):
+    redirect_after_login()
+
+# ======================================================
 # Login Screen
-# -----------------------------
+# ======================================================
 
-if not st.session_state.logged_in:
+st.title("🏥 MSU / EPID Health Coordinator Monitoring System")
+st.subheader("Secure Login")
 
-    st.title("🏥 MSU/EPID Health Coordinator Monitoring System")
+username = st.text_input("Username")
 
-    st.subheader("Login")
+password = st.text_input(
+    "Password",
+    type="password"
+)
 
-    username = st.text_input("Username")
+if st.button(
+    "🔐 Login",
+    use_container_width=True
+):
 
-    password = st.text_input(
-        "Password",
-        type="password"
+    status, result = AuthService.authenticate(
+        username,
+        password
     )
 
-    if st.button(
-        "Login",
-        use_container_width=True
-    ):
+    if status:
 
-        status, result = AuthService.authenticate(
-            username,
-            password
-        )
+        login(result)
 
-        if status:
+        st.success("Login Successful")
 
-            login(result)
+        st.rerun()
 
-            st.success("Login Successful")
+    else:
 
-            st.rerun()
-
-        else:
-
-            st.error(result)
-
-            st.stop()
-
-# -----------------------------
-# Redirect
-# -----------------------------
-
-if st.session_state.logged_in:
-    redirect_after_login()
+        st.error(result)
