@@ -5,8 +5,9 @@ from core.session import logout
 
 from services.user_service import UserService
 
+
 # ==========================================================
-# Security
+# Page Configuration
 # ==========================================================
 
 st.set_page_config(
@@ -17,6 +18,32 @@ st.set_page_config(
 
 require_login("Admin")
 
+
+# ==========================================================
+# Hide Default Navigation
+# ==========================================================
+
+st.markdown("""
+<style>
+
+section[data-testid="stSidebarNav"]{
+    display:none;
+}
+
+</style>
+""", unsafe_allow_html=True)
+
+
+# ==========================================================
+# Load Data
+# ==========================================================
+
+users = UserService.get_all_users()
+
+if users is None:
+    users = []
+
+
 # ==========================================================
 # Sidebar
 # ==========================================================
@@ -25,7 +52,7 @@ with st.sidebar:
 
     st.title("👨‍💼 Admin Panel")
 
-    st.success("🟢 Logged In")
+    st.success("🟢 Online")
 
     st.write(
         f"**Name :** {st.session_state.get('full_name','')}"
@@ -41,7 +68,7 @@ with st.sidebar:
 
     st.divider()
 
-    st.markdown("### Navigation")
+    st.markdown("### Quick Menu")
 
     st.write("🏠 Dashboard")
     st.write("👨‍⚕️ Coordinators")
@@ -57,6 +84,8 @@ with st.sidebar:
     ):
 
         logout()
+        st.stop()
+
 
 # ==========================================================
 # Header
@@ -68,147 +97,139 @@ st.caption("MSU / EPID Health Coordinator Monitoring System")
 
 st.divider()
 
+
 # ==========================================================
 # Statistics
 # ==========================================================
 
-users = UserService.get_all_users()
+total_users = len(users)
 
-developers = len(
-    [
-        u for u in users
-        if u["Role"] == "Developer"
-    ]
+developers = sum(
+    1
+    for u in users
+    if str(u.get("Role","")) == "Developer"
 )
 
-admins = len(
-    [
-        u for u in users
-        if u["Role"] == "Admin"
-    ]
+admins = sum(
+    1
+    for u in users
+    if str(u.get("Role","")) == "Admin"
 )
 
-coordinators = len(
-    [
-        u for u in users
-        if u["Role"] == "Coordinator"
-    ]
+coordinators = sum(
+    1
+    for u in users
+    if str(u.get("Role","")) == "Coordinator"
 )
 
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
-
-    st.metric(
-        "👥 Total Users",
-        len(users)
-    )
+    st.metric("👥 Total Users", total_users)
 
 with c2:
-
-    st.metric(
-        "👨‍💻 Developers",
-        developers
-    )
+    st.metric("👨‍💻 Developers", developers)
 
 with c3:
-
-    st.metric(
-        "👨‍💼 Admins",
-        admins
-    )
+    st.metric("👨‍💼 Admins", admins)
 
 with c4:
-
-    st.metric(
-        "🧑‍⚕️ Coordinators",
-        coordinators
-    )
+    st.metric("🧑‍⚕️ Coordinators", coordinators)
 
 st.divider()
+
 
 # ==========================================================
 # Tabs
 # ==========================================================
 
-tab1, tab2, tab3 = st.tabs(
-
+dashboard_tab, coordinator_tab, report_tab = st.tabs(
     [
-
         "📊 Dashboard",
-
         "👨‍⚕️ Coordinators",
-
         "📋 Reports"
-
     ]
-
 )
+
 
 # ==========================================================
 # Dashboard
 # ==========================================================
 
-with tab1:
+with dashboard_tab:
 
-    st.success("System Running Successfully")
+    st.success("✅ System Running Successfully")
 
     st.dataframe(
-
         users,
-
         use_container_width=True,
-
         hide_index=True
-
     )
 
+
 # ==========================================================
-# Coordinators
+# Coordinator List
 # ==========================================================
 
-with tab2:
-
-    coordinator_list = [
-
-        u for u in users
-
-        if u["Role"] == "Coordinator"
-
-    ]
+with coordinator_tab:
 
     st.subheader("Coordinator List")
 
+    coordinator_list = [
+
+        u
+
+        for u in users
+
+        if str(u.get("Role","")) == "Coordinator"
+
+    ]
+
     st.dataframe(
-
         coordinator_list,
-
         use_container_width=True,
-
         hide_index=True
-
     )
+
+    st.metric(
+        "Total Coordinators",
+        len(coordinator_list)
+    )
+
 
 # ==========================================================
 # Reports
 # ==========================================================
 
-with tab3:
+with report_tab:
 
-    st.info("Reports Module Coming Next")
-
-    st.button(
-
-        "📥 Export Excel",
-
-        use_container_width=True
-
+    st.info(
+        "Reports Module will be added in next update."
     )
 
-    st.button(
+    c1, c2 = st.columns(2)
 
-        "📄 Export PDF",
+    with c1:
 
-        use_container_width=True
+        st.button(
+            "📥 Export Excel",
+            use_container_width=True
+        )
 
-    )
+    with c2:
+
+        st.button(
+            "📄 Export PDF",
+            use_container_width=True
+        )
+
+
+# ==========================================================
+# Footer
+# ==========================================================
+
+st.divider()
+
+st.caption(
+    "MSU / EPID Health Coordinator Monitoring System | Admin Panel v1.0"
+)
