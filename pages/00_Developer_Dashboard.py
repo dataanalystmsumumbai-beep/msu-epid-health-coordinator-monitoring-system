@@ -1,9 +1,9 @@
 import streamlit as st
 
 from core.navigation import require_login
-
-from services.user_service import UserService
 from core.session import logout
+from services.user_service import UserService
+
 
 # ------------------------------------------------
 # Page Configuration
@@ -17,30 +17,30 @@ st.set_page_config(
 
 require_login("Developer")
 
+
+# ------------------------------------------------
+# Hide Default Navigation
+# ------------------------------------------------
+
 st.markdown("""
 <style>
+
 section[data-testid="stSidebarNav"]{
     display:none;
 }
+
 </style>
 """, unsafe_allow_html=True)
-# ------------------------------------------------
-# Login Check
-# ------------------------------------------------
 
-if (
-    not st.session_state.get("logged_in", False)
-    or st.session_state.get("role") != "Developer"
-):
-    st.warning("Please login first.")
-    st.switch_page("app.py")
-    st.stop()
+
 # ------------------------------------------------
 # Load Users
 # ------------------------------------------------
 
 users = UserService.get_all_users()
 
+if users is None:
+    users = []
 
 
 # ------------------------------------------------
@@ -51,22 +51,25 @@ with st.sidebar:
 
     st.markdown("# 👨‍💻 Developer")
 
-    username = st.session_state.get("username", "Guest")
-    role = st.session_state.get("role", "Developer")
-
     st.success("🟢 Online")
 
-    st.write(f"**User :** {username}")
-    st.write(f"**Role :** {role}")
+    st.write(
+        f"**User :** {st.session_state.get('username','')}"
+    )
+
+    st.write(
+        f"**Role :** {st.session_state.get('role','')}"
+    )
 
     st.divider()
 
     st.markdown("### Quick Menu")
 
-    st.write("📊 Dashboard")
-    st.write("👤 User Management")
+    st.write("🏠 Dashboard")
+    st.write("👥 User Management")
+    st.write("📊 Statistics")
     st.write("📝 Audit Logs")
-    st.write("⚙️ System Settings")
+    st.write("⚙️ Settings")
 
     st.divider()
 
@@ -77,44 +80,48 @@ with st.sidebar:
 
         logout()
 
-        st.session_state.clear()
-
-        st.switch_page("app.py")
-
         st.stop()
+
 
 # ------------------------------------------------
 # Header
 # ------------------------------------------------
 
-st.title("🏥 MSU / EPID Health Coordinator Monitoring System")
+st.title(
+    "🏥 MSU / EPID Health Coordinator Monitoring System"
+)
 
-st.caption("Developer Control Panel")
+st.caption(
+    "Developer Control Panel"
+)
 
 st.divider()
 
-st.write("DEBUG SESSION")
-
-st.json(dict(st.session_state))
 
 # ------------------------------------------------
-# Dashboard Cards
+# Statistics
 # ------------------------------------------------
-
 
 total_users = len(users)
 
-developer_count = len(
-    [u for u in users if u["Role"] == "Developer"]
+developer_count = sum(
+    1
+    for u in users
+    if str(u.get("Role", "")) == "Developer"
 )
 
-admin_count = len(
-    [u for u in users if u["Role"] == "Admin"]
+admin_count = sum(
+    1
+    for u in users
+    if str(u.get("Role", "")) == "Admin"
 )
 
-coordinator_count = len(
-    [u for u in users if u["Role"] == "Coordinator"]
+coordinator_count = sum(
+    1
+    for u in users
+    if str(u.get("Role", "")) == "Coordinator"
 )
+
 
 c1, c2, c3, c4 = st.columns(4)
 
@@ -142,21 +149,16 @@ with c4:
         coordinator_count
     )
 
+
 st.divider()
 
-# ------------------------------------------------
-# Tabs
-# ------------------------------------------------
 
 dashboard_tab, create_tab, users_tab = st.tabs(
     [
         "📊 Dashboard",
         "➕ Create User",
         "👥 User List"
-    ]
-)
-
-# ------------------------------------------------
+    ]# ------------------------------------------------
 # Dashboard
 # ------------------------------------------------
 
@@ -170,6 +172,7 @@ with dashboard_tab:
         hide_index=True
     )
 
+
 # ------------------------------------------------
 # Create User
 # ------------------------------------------------
@@ -178,7 +181,9 @@ with create_tab:
 
     st.subheader("Create New User")
 
-    username = st.text_input("Username")
+    username = st.text_input(
+        "Username"
+    )
 
     password = st.text_input(
         "Password",
@@ -194,13 +199,21 @@ with create_tab:
         ]
     )
 
-    full_name = st.text_input("Full Name")
+    full_name = st.text_input(
+        "Full Name"
+    )
 
-    designation = st.text_input("Designation")
+    designation = st.text_input(
+        "Designation"
+    )
 
-    mobile = st.text_input("Mobile")
+    mobile = st.text_input(
+        "Mobile Number"
+    )
 
-    email = st.text_input("Email")
+    email = st.text_input(
+        "Email"
+    )
 
     if st.button(
         "✅ Create User",
@@ -215,7 +228,10 @@ with create_tab:
             designation=designation,
             mobile=mobile,
             email=email,
-            created_by=st.session_state.username
+            created_by=st.session_state.get(
+                "username",
+                "SYSTEM"
+            )
         )
 
         if status:
@@ -236,26 +252,81 @@ with users_tab:
 
     st.subheader("Existing Users")
 
-    search = st.text_input("🔍 Search User")
+    search = st.text_input(
+        "🔍 Search User"
+    )
 
-    if search:
+    filtered_users = users
 
-        filtered = [
-            u for u in users
-            if search.lower() in str(u).lower()
+    if search.strip():
+
+        search_text = search.strip().lower()
+
+        filtered_users = [
+
+            user
+
+            for user in users
+
+            if
+            search_text in str(user.get("Username", "")).lower()
+            or search_text in str(user.get("Full_Name", "")).lower()
+            or search_text in str(user.get("Role", "")).lower()
+            or search_text in str(user.get("Designation", "")).lower()
+            or search_text in str(user.get("Mobile", "")).lower()
+            or search_text in str(user.get("Email", "")).lower()
+
         ]
 
-        st.dataframe(
-            filtered,
-            use_container_width=True,
-            hide_index=True
+    st.dataframe(
+        filtered_users,
+        use_container_width=True,
+        hide_index=True
+    )
+
+    st.divider()
+
+    c1, c2, c3 = st.columns(3)
+
+    with c1:
+
+        st.metric(
+            "Displayed Users",
+            len(filtered_users)
         )
 
-    else:
+    with c2:
 
-        st.dataframe(
-            users,
-            use_container_width=True,
-            hide_index=True
+        st.metric(
+            "Total Users",
+            len(users)
         )
-st.write("Logged In =", st.session_state.get("logged_in"))
+
+    with c3:
+
+        active_users = len(
+            [
+                u
+                for u in users
+                if str(
+                    u.get("Status", "")
+                ).upper() == "ACTIVE"
+            ]
+        )
+
+        st.metric(
+            "Active Users",
+            active_users
+        )
+
+# ------------------------------------------------
+# Footer
+# ------------------------------------------------
+
+st.divider()
+
+st.caption(
+    "MSU / EPID Health Coordinator Monitoring System | Developer Panel v1.0"
+)
+)
+
