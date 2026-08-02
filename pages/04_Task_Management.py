@@ -1,176 +1,211 @@
 import streamlit as st
 
 from core.navigation import require_login
+
 from services.task_service import TaskService
 
-# -----------------------------------
-# Login Check
-# -----------------------------------
-
-require_login(["Developer", "Admin"])
-
-# -----------------------------------
-# Page
-# -----------------------------------
-
 st.set_page_config(
+
     page_title="Task Management",
     page_icon="📋",
     layout="wide"
+
 )
 
-st.title("📋 Task Master")
+require_login(["Developer","Admin"])
+
+st.title("📋 Task Management")
 
 st.divider()
 
-# -----------------------------------
-# Dashboard
-# -----------------------------------
+tasks = TaskService.get_all_tasks()
+
+if tasks is None:
+
+    tasks = []
 
 stats = TaskService.statistics()
 
-c1, c2, c3 = st.columns(3)
+c1,c2,c3 = st.columns(3)
 
 with c1:
+
     st.metric(
+
         "Total Tasks",
+
         stats["total"]
+
     )
 
 with c2:
+
     st.metric(
+
         "Active",
+
         stats["active"]
+
     )
 
 with c3:
+
     st.metric(
+
         "Inactive",
+
         stats["inactive"]
+
     )
 
 st.divider()
 
-tab1, tab2 = st.tabs(
+tab1,tab2 = st.tabs(
 
     [
 
-        "➕ Create Task",
+        "📋 Task List",
 
-        "📋 View Tasks"
+        "➕ Create Task"
 
     ]
 
 )
 
-# ===================================
-# Create Task
-# ===================================
-
 with tab1:
 
-    with st.form("task_form"):
+    search = st.text_input(
 
-        task_name = st.text_input(
-            "Task Name"
-        )
+        "Search Task"
 
-        category = st.text_input(
-            "Category"
-        )
+    )
 
-        frequency = st.selectbox(
+    display = tasks
 
-            "Frequency",
+    if search.strip():
 
-            [
+        display = [
 
-                "Daily",
+            x
 
-                "Weekly",
+            for x in tasks
 
-                "Monthly"
+            if search.lower()
 
-            ]
+            in str(x).lower()
 
-        )
+        ]
 
-        priority = st.selectbox(
+    st.dataframe(
 
-            "Priority",
+        display,
 
-            [
+        use_container_width=True,
 
-                "High",
+        hide_index=True
 
-                "Medium",
-
-                "Low"
-
-            ]
-
-        )
-
-        task_link = st.text_input(
-            "Task Link"
-        )
-
-        remarks = st.text_area(
-            "Remarks"
-        )
-
-        submit = st.form_submit_button(
-            "Create Task"
-        )
-
-        if submit:
-
-            status, msg = TaskService.create_task(
-
-                task_name,
-
-                category,
-
-                frequency,
-
-                priority,
-
-                task_link,
-
-                remarks
-
-            )
-
-            if status:
-
-                st.success(msg)
-
-                st.rerun()
-
-            else:
-
-                st.error(msg)
-
-# ===================================
-# Task List
-# ===================================
+    )
 
 with tab2:
 
-    tasks = TaskService.get_all_tasks()
+    st.subheader("➕ Create New Task")
 
-    if len(tasks) == 0:
+    task_name = st.text_input(
+        "Task Name"
+    )
 
-        st.info("No Tasks Found")
+    category = st.selectbox(
+        "Category",
+        [
+            "Reporting",
+            "Review",
+            "Survey",
+            "Field Visit",
+            "Meeting",
+            "Training",
+            "Other"
+        ]
+    )
 
-    else:
+    frequency = st.selectbox(
+        "Frequency",
+        [
+            "Daily",
+            "Weekly",
+            "Monthly",
+            "Quarterly",
+            "Yearly"
+        ]
+    )
 
-        st.dataframe(
+    priority = st.selectbox(
+        "Priority",
+        [
+            "High",
+            "Medium",
+            "Low"
+        ]
+    )
 
-            tasks,
+    task_link = st.text_input(
+        "Task Link (Optional)"
+    )
 
-            use_container_width=True,
+    remarks = st.text_area(
+        "Remarks"
+    )
 
-            hide_index=True
+    if st.button(
+        "✅ Create Task",
+        use_container_width=True
+    ):
+
+        status, message = TaskService.create_task(
+
+            task_name=task_name,
+            category=category,
+            frequency=frequency,
+            priority=priority,
+            task_link=task_link,
+            remarks=remarks
 
         )
+
+        if status:
+
+            st.success(message)
+
+            st.rerun()
+
+        else:
+
+            st.error(message)
+
+
+st.divider()
+
+st.subheader("📋 Existing Tasks")
+
+if len(tasks) == 0:
+
+    st.info("No Task Found.")
+
+else:
+
+    st.dataframe(
+
+        tasks,
+
+        use_container_width=True,
+
+        hide_index=True
+
+    )
+
+
+st.divider()
+
+st.caption(
+    "MSU / EPID Health Coordinator Monitoring System | Task Management"
+)
+
