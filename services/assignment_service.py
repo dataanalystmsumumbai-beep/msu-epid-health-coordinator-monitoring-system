@@ -1,6 +1,7 @@
 from uuid import uuid4
 
-from config.config import TASK_ASSIGNMENT
+from config.config import COORDINATOR_TASK_MAP
+
 from utils.google_sheet import (
     read_all,
     insert_row,
@@ -14,7 +15,7 @@ class AssignmentService:
     def get_all_assignments():
 
         try:
-            data = read_all(TASK_ASSIGNMENT)
+            data = read_all(COORDINATOR_TASK_MAP)
 
             return data if data else []
 
@@ -66,7 +67,7 @@ class AssignmentService:
 
         insert_row(
 
-            TASK_ASSIGNMENT,
+            COORDINATOR_TASK_MAP,
             row
 
         )
@@ -84,7 +85,7 @@ class AssignmentService:
 
         update_value(
 
-            TASK_ASSIGNMENT,
+            COORDINATOR_TASK_MAP,
             row_no,
             5,
             due_date
@@ -93,7 +94,7 @@ class AssignmentService:
 
         update_value(
 
-            TASK_ASSIGNMENT,
+            COORDINATOR_TASK_MAP,
             row_no,
             8,
             remarks
@@ -107,7 +108,7 @@ class AssignmentService:
 
         update_value(
 
-            TASK_ASSIGNMENT,
+            COORDINATOR_TASK_MAP,
             row_no,
             6,
             "INACTIVE"
