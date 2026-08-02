@@ -1,3 +1,7 @@
+if not username.strip() or not password:
+    return False, "Username and Password are required."
+
+
 from config.config import USER_MASTER
 
 from utils.google_sheet import (
@@ -65,12 +69,12 @@ class AuthService:
                 password_hash
             ):
 
-                attempts = int(
-                    user.get(
-                        "Login_Attempts",
-                        0
-                    )
-                ) + 1
+           try:
+    attempts = int(user.get("Login_Attempts", 0))
+except:
+    attempts = 0
+
+attempts += 1
 
                 update_value(
                     USER_MASTER,
