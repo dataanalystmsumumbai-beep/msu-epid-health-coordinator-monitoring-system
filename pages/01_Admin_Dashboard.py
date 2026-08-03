@@ -5,6 +5,10 @@ from core.session import logout
 
 from services.user_service import UserService
 
+from services.task_service import TaskService
+from services.task_assignment_service import TaskAssignmentService
+from datetime import date
+
 
 # ==========================================================
 # Page Configuration
@@ -143,11 +147,12 @@ st.divider()
 # Tabs
 # ==========================================================
 
-dashboard_tab, coordinator_tab, report_tab = st.tabs(
+dashboard_tab, coordinator_tab, assignment_tab, report_tab = st.tabs(
     [
         "📊 Dashboard",
         "👨‍⚕️ Coordinators",
-        "📋 Reports"
+        "📋 Task Assignment",
+        "📈 Reports"
     ]
 )
 
@@ -195,6 +200,143 @@ with coordinator_tab:
         "Total Coordinators",
         len(coordinator_list)
     )
+
+
+
+# ==========================================================
+# Task Assignment
+# ==========================================================
+
+with assignment_tab:
+
+    st.subheader("📋 Assign Task")
+
+    coordinators = [
+
+        u
+
+        for u in users
+
+        if str(u.get("Role", "")).strip() == "Coordinator"
+
+    ]
+
+    tasks = TaskService.get_all_tasks()
+
+    if len(coordinators) == 0:
+
+        st.warning("No Coordinator Available.")
+
+    elif len(tasks) == 0:
+
+        st.warning("No Task Available.")
+
+    else:
+
+        coordinator_names = {
+
+            f"{c.get('Full_Name')} ({c.get('Username')})": c.get("User_ID")
+
+            for c in coordinators
+
+        }
+
+        task_names = {
+
+            t.get("Task_Name"): t.get("Task_ID")
+
+            for t in tasks
+
+        }
+
+        coordinator = st.selectbox(
+
+            "Coordinator",
+
+            list(coordinator_names.keys())
+
+        )
+
+        task = st.selectbox(
+
+            "Task",
+
+            list(task_names.keys())
+
+        )
+
+        priority = st.selectbox(
+
+            "Priority",
+
+            [
+
+                "High",
+
+                "Medium",
+
+                "Low"
+
+            ]
+
+        )
+
+        assigned_date = st.date_input(
+
+            "Assigned Date",
+
+            value=date.today()
+
+        )
+
+        due_date = st.date_input(
+
+            "Due Date",
+
+            value=date.today()
+
+        )
+
+        remarks = st.text_area(
+
+            "Remarks"
+
+        )
+
+        if st.button(
+
+            "✅ Assign Task",
+
+            use_container_width=True
+
+        ):
+
+            status, message = TaskAssignmentService.assign_task(
+
+                coordinator_id=coordinator_names[coordinator],
+
+                task_id=task_names[task],
+
+                assigned_by=st.session_state.get("username"),
+
+                assigned_date=str(assigned_date),
+
+                due_date=str(due_date),
+
+                priority=priority,
+
+                remarks=remarks
+
+            )
+
+            if status:
+
+                st.success(message)
+
+            else:
+
+                st.error(message)
+
 
 
 # ==========================================================
