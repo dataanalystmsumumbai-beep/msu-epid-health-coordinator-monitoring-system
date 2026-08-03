@@ -1,7 +1,3 @@
-if not username.strip() or not password:
-    return False, "Username and Password are required."
-
-
 from config.config import USER_MASTER
 
 from utils.google_sheet import (
@@ -21,6 +17,9 @@ class AuthService:
 
     @staticmethod
     def authenticate(username, password):
+
+        if not username.strip() or not password:
+            return False, "Username and Password are required."
 
         username = username.strip().lower()
 
@@ -69,12 +68,14 @@ class AuthService:
                 password_hash
             ):
 
-           try:
-    attempts = int(user.get("Login_Attempts", 0))
-except:
-    attempts = 0
+                try:
+                    attempts = int(
+                        user.get("Login_Attempts", 0)
+                    )
+                except Exception:
+                    attempts = 0
 
-attempts += 1
+                attempts += 1
 
                 update_value(
                     USER_MASTER,
@@ -97,7 +98,7 @@ attempts += 1
                 return False, "Invalid Password"
 
             # -------------------------
-            # Reset Login Attempt
+            # Reset Login Attempts
             # -------------------------
 
             update_value(
@@ -113,10 +114,6 @@ attempts += 1
                 10,
                 "YES"
             )
-
-            # -------------------------
-            # Log
-            # -------------------------
 
             save_login_history(user)
 
