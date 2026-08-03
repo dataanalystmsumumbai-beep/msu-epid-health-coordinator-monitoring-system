@@ -133,13 +133,13 @@ class TaskService:
         active = sum(
             1
             for t in tasks
-            if str(t.get("Status", "")) == "ACTIVE"
+            if str(t.get("Status", "")).upper() == "ACTIVE"
         )
 
         inactive = sum(
             1
             for t in tasks
-            if str(t.get("Status", "")) == "INACTIVE"
+            if str(t.get("Status", "")).upper() == "INACTIVE"
         )
 
         return {
