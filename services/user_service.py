@@ -220,3 +220,32 @@ class UserService:
             for user in users
             if str(user.get("Role", "")).strip() == role
         )
+        
+    @staticmethod
+    def statistics():
+
+        users = read_all(USER_MASTER)
+
+        return {
+
+            "total": len(users),
+
+            "developers": sum(
+                1
+                for u in users
+                if str(u.get("Role", "")) == "Developer"
+            ),
+
+            "admins": sum(
+                1
+                for u in users
+                if str(u.get("Role", "")) == "Admin"
+            ),
+
+            "coordinators": sum(
+                1
+                for u in users
+                if str(u.get("Role", "")) == "Coordinator"
+            )
+
+        }
