@@ -90,8 +90,8 @@ with tab1:
 
             for x in tasks
 
-            if search.lower()
-
+           if search.strip().lower()
+           
             in str(x).lower()
 
         ]
@@ -181,26 +181,6 @@ with tab2:
 
             st.error(message)
 
-
-st.divider()
-
-st.subheader("📋 Existing Tasks")
-
-if len(tasks) == 0:
-
-    st.info("No Task Found.")
-
-else:
-
-    st.dataframe(
-
-        tasks,
-
-        use_container_width=True,
-
-        hide_index=True
-
-    )
 
 
 st.divider()
