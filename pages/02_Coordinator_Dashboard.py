@@ -26,15 +26,15 @@ with st.sidebar:
     st.success("🟢 Logged In")
 
     st.write(
-        f"**Name :** {st.session_state.get('full_name','')}"
+        f"**Name :** {st.session_state.get('full_name', '')}"
     )
 
     st.write(
-        f"**Username :** {st.session_state.get('username','')}"
+        f"**Username :** {st.session_state.get('username', '')}"
     )
 
     st.write(
-        f"**Role :** {st.session_state.get('role','')}"
+        f"**Role :** {st.session_state.get('role', '')}"
     )
 
     st.divider()
@@ -50,11 +50,11 @@ with st.sidebar:
     st.divider()
 
     if st.button(
-    "🚪 Logout",
-    use_container_width=True
-):
-    logout()
-    st.stop()
+        "🚪 Logout",
+        use_container_width=True
+    ):
+        logout()
+        st.rerun()
 
 # ==========================================================
 # Header
@@ -73,28 +73,16 @@ st.divider()
 c1, c2, c3, c4 = st.columns(4)
 
 with c1:
-    st.metric(
-        "📋 Assigned Tasks",
-        "0"
-    )
+    st.metric("📋 Assigned Tasks", "0")
 
 with c2:
-    st.metric(
-        "✅ Completed",
-        "0"
-    )
+    st.metric("✅ Completed", "0")
 
 with c3:
-    st.metric(
-        "⏳ Pending",
-        "0"
-    )
+    st.metric("⏳ Pending", "0")
 
 with c4:
-    st.metric(
-        "📈 Progress",
-        "0%"
-    )
+    st.metric("📈 Progress", "0%")
 
 st.divider()
 
@@ -111,39 +99,43 @@ tab1, tab2, tab3 = st.tabs(
 )
 
 # ==========================================================
-# Dashboard
+# Dashboard Tab
 # ==========================================================
 
 with tab1:
 
-    st.success(
-        "Welcome to Coordinator Dashboard."
-    )
+    st.success("Welcome to Coordinator Dashboard.")
 
     st.info(
         "Daily Review and Task Management modules will display here."
     )
 
 # ==========================================================
-# Tasks
+# Tasks Tab
 # ==========================================================
 
 with tab2:
 
     st.subheader("Assigned Tasks")
 
-    st.info(
-        "No task assigned."
-    )
+    st.info("No task assigned.")
 
 # ==========================================================
-# Notifications
+# Notifications Tab
 # ==========================================================
 
 with tab3:
 
     st.subheader("Notifications")
 
-    st.info(
-        "No notifications available."
-    )
+    st.info("No notifications available.")
+
+# ==========================================================
+# Footer
+# ==========================================================
+
+st.divider()
+
+st.caption(
+    "MSU / EPID Health Coordinator Monitoring System | Coordinator Panel v1.0"
+)
