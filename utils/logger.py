@@ -2,9 +2,14 @@ from utils.google_sheet import insert_row
 from datetime import datetime
 
 
-AUDIT_SHEET = "07_Audit_Log"
+from config.config import (
+    AUDIT_LOG,
+    LOGIN_HISTORY
+)
 
-LOGIN_SHEET = "06_Login_History"
+AUDIT_SHEET = AUDIT_LOG
+
+LOGIN_SHEET = LOGIN_HISTORY
 
 
 def save_login_history(user):
