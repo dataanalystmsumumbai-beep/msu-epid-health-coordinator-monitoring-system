@@ -158,7 +158,10 @@ dashboard_tab, create_tab, users_tab = st.tabs(
         "📊 Dashboard",
         "➕ Create User",
         "👥 User List"
-    ]# ------------------------------------------------
+    ]
+)
+
+# ------------------------------------------------
 # Dashboard
 # ------------------------------------------------
 
@@ -327,6 +330,5 @@ st.divider()
 
 st.caption(
     "MSU / EPID Health Coordinator Monitoring System | Developer Panel v1.0"
-)
 )
 
