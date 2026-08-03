@@ -48,14 +48,16 @@ if not st.session_state.logged_in:
             password
         )
 
-        if status:
+        
+       if status:
 
-            login(result)
+    login(result)
 
-            st.success("Login Successful")
+    redirect_after_login()
 
-            st.rerun()
+    st.stop()
 
+        
         else:
 
             st.error(result)
