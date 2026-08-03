@@ -107,7 +107,7 @@ total_users = len(users)
 developers = sum(
     1
     for u in users
-    if str(u.get("Role","")) == "Developer"
+   if str(u.get("Role", "")).strip().upper() == "DEVELOPER"
 )
 
 admins = sum(
@@ -119,7 +119,7 @@ admins = sum(
 coordinators = sum(
     1
     for u in users
-    if str(u.get("Role","")) == "Coordinator"
+   if str(u.get("Role", "")).strip().upper() == "COORDINATOR"
 )
 
 c1, c2, c3, c4 = st.columns(4)
@@ -181,7 +181,7 @@ with coordinator_tab:
 
         for u in users
 
-        if str(u.get("Role","")) == "Coordinator"
+       if str(u.get("Role", "")).strip().upper() == "COORDINATOR"
 
     ]
 
