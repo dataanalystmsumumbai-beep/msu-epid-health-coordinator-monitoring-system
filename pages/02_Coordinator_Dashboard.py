@@ -50,10 +50,11 @@ with st.sidebar:
     st.divider()
 
     if st.button(
-        "🚪 Logout",
-        use_container_width=True
-    ):
-        logout()
+    "🚪 Logout",
+    use_container_width=True
+):
+    logout()
+    st.stop()
 
 # ==========================================================
 # Header
