@@ -48,16 +48,14 @@ if not st.session_state.logged_in:
             password
         )
 
-        
-       if status:
+        if status:
 
-    login(result)
+            login(result)
 
-    redirect_after_login()
+            redirect_after_login()
 
-    st.stop()
+            st.stop()
 
-        
         else:
 
             st.error(result)
@@ -69,4 +67,5 @@ if not st.session_state.logged_in:
 # -----------------------------
 
 if st.session_state.logged_in:
+
     redirect_after_login()
