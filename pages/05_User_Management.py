@@ -81,7 +81,14 @@ with tab2:
 
             for u in users
 
-            if search.lower() in str(u).lower()
+           if search.strip().lower() in (
+               str(u.get("Username", "")) + " " +
+               str(u.get("Full_Name", "")) + " " +
+               str(u.get("Role", "")) + " " +
+               str(u.get("Designation", "")) + " " +
+               str(u.get("Mobile", "")) + " " +
+               str(u.get("Email", ""))
+            ).lower()
 
         ]
 
