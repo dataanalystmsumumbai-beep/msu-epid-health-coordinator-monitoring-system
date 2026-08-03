@@ -3,6 +3,11 @@ import streamlit as st
 from core.navigation import require_login
 from core.session import logout
 
+from services.task_assignment_service import TaskAssignmentService
+from services.task_service import TaskService
+
+
+
 # ==========================================================
 # Page Configuration
 # ==========================================================
@@ -116,10 +121,64 @@ with tab1:
 
 with tab2:
 
-    st.subheader("Assigned Tasks")
+    st.subheader("📋 My Assigned Tasks")
 
-    st.info("No task assigned.")
+    assignments = TaskAssignmentService.coordinator_tasks(
+        st.session_state.get("user_id")
+    )
 
+    if len(assignments) == 0:
+
+        st.info("No Task Assigned.")
+
+    else:
+
+        tasks = TaskService.get_all_tasks()
+
+        task_lookup = {
+
+            t.get("Task_ID"): t.get("Task_Name")
+
+            for t in tasks
+
+        }
+
+        display = []
+
+        for a in assignments:
+
+            display.append({
+
+                "Task":
+                    task_lookup.get(
+                        a.get("Task_ID"),
+                        a.get("Task_ID")
+                    ),
+
+                "Priority":
+                    a.get("Priority"),
+
+                "Assigned Date":
+                    a.get("Assigned_Date"),
+
+                "Due Date":
+                    a.get("Due_Date"),
+
+                "Status":
+                    a.get("Status")
+
+            })
+
+        st.dataframe(
+
+            display,
+
+            use_container_width=True,
+
+            hide_index=True
+
+        )
+        
 # ==========================================================
 # Notifications Tab
 # ==========================================================
