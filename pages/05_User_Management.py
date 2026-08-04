@@ -444,6 +444,61 @@ with tab3:
 
                     st.rerun()
 
+        st.divider()
+
+        st.subheader("🔄 Change User Role")
+
+        new_role = st.selectbox(
+            "New Role",
+            [
+                "Developer",
+                "Admin",
+                "Coordinator"
+            ]
+        )
+
+        if st.button(
+            "🔄 Update Role",
+            use_container_width=True
+        ):
+
+            ok, msg = UserService.change_role(
+                row_no,
+                new_role,
+                st.session_state.get(
+                    "username",
+                    "SYSTEM"
+                )
+            )
+
+            if ok:
+
+                st.success(msg)
+
+                st.rerun()
+
+        st.divider()
+
+        if st.button(
+            "🗑 Archive User",
+            use_container_width=True
+        ):
+
+            ok, msg = UserService.soft_delete_user(
+                row_no,
+                st.session_state.get(
+                    "username",
+                    "SYSTEM"
+                )
+            )
+
+            if ok:
+
+                st.success(msg)
+
+                st.rerun()
+                
+
 # ==========================================================
 # Footer
 # ==========================================================
