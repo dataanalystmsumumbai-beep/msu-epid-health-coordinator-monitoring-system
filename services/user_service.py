@@ -249,3 +249,64 @@ class UserService:
             )
 
         }
+
+    @staticmethod
+    def enable_user(
+        row_no,
+        modified_by="SYSTEM"
+    ):
+
+        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+
+        update_value(USER_MASTER, row_no, 9, "ACTIVE")
+        update_value(USER_MASTER, row_no, 16, current_time)
+        update_value(USER_MASTER, row_no, 17, modified_by)
+
+        return True, "User Enabled Successfully."
+
+
+    @staticmethod
+    def soft_delete_user(
+        row_no,
+        modified_by="SYSTEM"
+    ):
+
+        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+
+        update_value(USER_MASTER, row_no, 9, "DELETED")
+        update_value(USER_MASTER, row_no, 16, current_time)
+        update_value(USER_MASTER, row_no, 17, modified_by)
+
+        return True, "User Archived Successfully."
+
+
+    @staticmethod
+    def change_role(
+        row_no,
+        role,
+        modified_by="SYSTEM"
+    ):
+
+        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+
+        update_value(USER_MASTER, row_no, 4, role)
+        update_value(USER_MASTER, row_no, 16, current_time)
+        update_value(USER_MASTER, row_no, 17, modified_by)
+
+        return True, "Role Updated Successfully."
+
+
+    @staticmethod
+    def change_status(
+        row_no,
+        status,
+        modified_by="SYSTEM"
+    ):
+
+        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+
+        update_value(USER_MASTER, row_no, 9, status)
+        update_value(USER_MASTER, row_no, 16, current_time)
+        update_value(USER_MASTER, row_no, 17, modified_by)
+
+        return True, "Status Updated Successfully."
