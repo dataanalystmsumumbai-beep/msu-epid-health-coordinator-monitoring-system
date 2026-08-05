@@ -278,6 +278,16 @@ with tab2:
 # User Actions
 # ==========================================================
 
+# ==========================================================
+# PART 1
+# Replace ONLY this section inside:
+#
+# with tab3:
+#
+# Remove everything inside "with tab3:"
+# and paste the following.
+# ==========================================================
+
 with tab3:
 
     st.subheader("⚙ User Actions")
@@ -289,75 +299,123 @@ with tab3:
     else:
 
         user_names = [
-
             f"{u.get('Username')} ({u.get('Role')})"
-
             for u in users
-
         ]
 
         selected = st.selectbox(
-
             "Select User",
-
             range(len(user_names)),
-
             format_func=lambda x: user_names[x]
-
         )
 
         selected_user = users[selected]
 
         row_no = selected + 2
 
-        current_role = st.session_state.get("role", "")
-
-target_role = selected_user.get("Role", "")
-
-can_manage = True
-
-# Admin cannot manage Developers
-if current_role == "Admin" and target_role == "Developer":
-    can_manage = False
-    
-
         st.divider()
+
+        st.markdown("### 👤 User Information")
 
         c1, c2 = st.columns(2)
 
         with c1:
 
-            st.write(
-                f"**Username :** {selected_user.get('Username','')}"
+            full_name = st.text_input(
+                "Full Name",
+                value=selected_user.get("Full_Name", "")
             )
 
-            st.write(
-                f"**Full Name :** {selected_user.get('Full_Name','')}"
+            designation = st.text_input(
+                "Designation",
+                value=selected_user.get("Designation", "")
             )
 
-            st.write(
-                f"**Role :** {selected_user.get('Role','')}"
+            mobile = st.text_input(
+                "Mobile",
+                value=selected_user.get("Mobile", "")
             )
 
-            st.write(
-                f"**Status :** {selected_user.get('Status','')}"
+        with c2:
+
+            email = st.text_input(
+                "Email",
+                value=selected_user.get("Email", "")
             )
 
-if not can_manage:
+            role = st.selectbox(
+                "Role",
+                [
+                    "Developer",
+                    "Admin",
+                    "Coordinator"
+                ],
+                index=[
+                    "Developer",
+                    "Admin",
+                    "Coordinator"
+                ].index(
+                    selected_user.get("Role", "Coordinator")
+                )
+            )
 
-    st.warning(
-        "You are not authorized to manage Developer accounts."
-    )
+            status = st.selectbox(
+                "Status",
+                [
+                    "ACTIVE",
+                    "INACTIVE",
+                    "DELETED"
+                ],
+                index=[
+                    "ACTIVE",
+                    "INACTIVE",
+                    "DELETED"
+                ].index(
+                    selected_user.get("Status", "ACTIVE")
+                )
+            )
 
-else:
+        st.divider()
 
-       if not can_manage:
+        if st.button(
+            "💾 Update User",
+            use_container_width=True
+        ):
 
-    st.warning("You are not authorized to manage Developer accounts.")
+            ok, msg = UserService.update_user(
 
-else:
+                row_no=row_no,
 
-    with c2:
+                full_name=full_name,
+
+                designation=designation,
+
+                mobile=mobile,
+
+                email=email,
+
+                role=role,
+
+                modified_by=st.session_state.get(
+                    "username",
+                    "SYSTEM"
+                )
+
+            )
+
+            if ok:
+
+                st.success(msg)
+
+                st.rerun()
+
+            else:
+
+                st.error(msg)
+
+        st.divider()
+
+        st.subheader("🔑 Reset Password")
 
         new_password = st.text_input(
             "New Password",
@@ -365,121 +423,119 @@ else:
         )
 
         if st.button(
-            "🔑 Reset Password",
+            "Reset Password",
             use_container_width=True
         ):
 
             ok, msg = UserService.reset_password(
+
                 row_no,
+
                 new_password,
-                st.session_state.get("username", "SYSTEM")
+
+                st.session_state.get(
+                    "username",
+                    "SYSTEM"
+                )
+
             )
 
             if ok:
+
                 st.success(msg)
+
+                st.rerun()
+
             else:
+
                 st.error(msg)
 
-    st.divider()
+        st.divider()
 
-    c1, c2, c3 = st.columns(3)
+        c1, c2, c3 = st.columns(3)
 
-    with c1:
+        with c1:
 
-        if st.button(
-            "🟢 Enable User",
-            use_container_width=True
-        ):
+            if st.button(
+                "🟢 Enable User",
+                use_container_width=True
+            ):
 
-            ok, msg = UserService.enable_user(
-                row_no,
-                st.session_state.get("username", "SYSTEM")
-            )
+                ok, msg = UserService.enable_user(
 
-            if ok:
-                st.success(msg)
-                st.rerun()
+                    row_no,
 
-    with c2:
+                    st.session_state.get(
+                        "username",
+                        "SYSTEM"
+                    )
 
-        if st.button(
-            "🔴 Disable User",
-            use_container_width=True
-        ):
+                )
 
-            ok, msg = UserService.disable_user(
-                row_no,
-                st.session_state.get("username", "SYSTEM")
-            )
+                if ok:
 
-            if ok:
-                st.success(msg)
-                st.rerun()
+                    st.success(msg)
 
-    with c3:
+                    st.rerun()
 
-        if st.button(
-            "♻ Unlock Account",
-            use_container_width=True
-        ):
+        with c2:
 
-            ok, msg = UserService.unlock_user(row_no)
+            if st.button(
+                "🔴 Disable User",
+                use_container_width=True
+            ):
 
-            if ok:
-                st.success(msg)
-                st.rerun()
+                ok, msg = UserService.disable_user(
 
-    st.divider()
+                    row_no,
 
-    st.subheader("🔄 Change User Role")
+                    st.session_state.get(
+                        "username",
+                        "SYSTEM"
+                    )
 
-    new_role = st.selectbox(
-        "New Role",
-        [
-            "Developer",
-            "Admin",
-            "Coordinator"
-        ]
-    )
+                )
 
-    if st.button(
-        "🔄 Update Role",
-        use_container_width=True
-    ):
+                if ok:
 
-        ok, msg = UserService.change_role(
-            row_no,
-            new_role,
-            st.session_state.get("username", "SYSTEM")
-        )
+                    st.success(msg)
 
-        if ok:
-            st.success(msg)
-            st.rerun()
+                    st.rerun()
 
-    st.divider()
+        with c3:
 
-    if st.button(
-        "🗑 Archive User",
-        use_container_width=True
-    ):
+            if st.button(
+                "♻ Unlock Account",
+                use_container_width=True
+            ):
 
-        ok, msg = UserService.soft_delete_user(
-            row_no,
-            st.session_state.get("username", "SYSTEM")
-        )
+                ok, msg = UserService.unlock_user(row_no)
 
-        if ok:
-            st.success(msg)
-            st.rerun()
-            
-            new_role = st.selectbox(
+                if ok:
+
+                    st.success(msg)
+
+                    st.rerun()
+
+        st.divider()
+
+        st.subheader("🔄 Change Role")
+
+        new_role = st.selectbox(
             "New Role",
             [
                 "Developer",
                 "Admin",
                 "Coordinator"
-            ]
+            ],
+            index=[
+                "Developer",
+                "Admin",
+                "Coordinator"
+            ].index(
+                selected_user.get("Role", "Coordinator")
+            ),
+            key="change_role"
         )
 
         if st.button(
@@ -488,12 +544,16 @@ else:
         ):
 
             ok, msg = UserService.change_role(
+
                 row_no,
+
                 new_role,
+
                 st.session_state.get(
                     "username",
                     "SYSTEM"
                 )
+
             )
 
             if ok:
@@ -501,6 +561,10 @@ else:
                 st.success(msg)
 
                 st.rerun()
+
+            else:
+
+                st.error(msg)
 
         st.divider()
 
@@ -510,11 +574,14 @@ else:
         ):
 
             ok, msg = UserService.soft_delete_user(
+
                 row_no,
+
                 st.session_state.get(
                     "username",
                     "SYSTEM"
                 )
+
             )
 
             if ok:
@@ -522,7 +589,10 @@ else:
                 st.success(msg)
 
                 st.rerun()
-                
+
+            else:
+
+                st.error(msg)
 
 # ==========================================================
 # Footer
