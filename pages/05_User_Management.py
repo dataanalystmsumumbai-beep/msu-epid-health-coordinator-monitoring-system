@@ -310,75 +310,281 @@ with tab3:
 
         row_no = selected + 2
 
-        st.divider()
+        current_role = str(
+            st.session_state.get("role", "")
+        ).strip()
+
+        target_role = str(
+            selected_user.get("Role", "")
+        ).strip()
+
+        can_manage = True
+
+        # Admin cannot manage Developer
+        if current_role == "Admin" and target_role == "Developer":
+            can_manage = False
 
         # ==================================================
         # USER INFORMATION
         # ==================================================
+
+        st.divider()
 
         c1, c2 = st.columns(2)
 
         with c1:
 
             st.write(
-                f"**Username :** {selected_user.get('Username', '')}"
+                f"**Username :** "
+                f"{selected_user.get('Username', '')}"
             )
 
             st.write(
-                f"**Full Name :** {selected_user.get('Full_Name', '')}"
+                f"**Full Name :** "
+                f"{selected_user.get('Full_Name', '')}"
             )
 
             st.write(
-                f"**Role :** {selected_user.get('Role', '')}"
+                f"**Role :** "
+                f"{selected_user.get('Role', '')}"
             )
 
             st.write(
-                f"**Status :** {selected_user.get('Status', '')}"
+                f"**Status :** "
+                f"{selected_user.get('Status', '')}"
             )
 
         with c2:
 
             st.write(
-                f"**Designation :** {selected_user.get('Designation', '')}"
+                f"**Designation :** "
+                f"{selected_user.get('Designation', '')}"
             )
 
             st.write(
-                f"**Mobile :** {selected_user.get('Mobile', '')}"
+                f"**Mobile :** "
+                f"{selected_user.get('Mobile', '')}"
             )
 
             st.write(
-                f"**Email :** {selected_user.get('Email', '')}"
+                f"**Email :** "
+                f"{selected_user.get('Email', '')}"
             )
 
-        st.divider()
-
         # ==================================================
-        # RESET PASSWORD
+        # MANAGEMENT CONTROLS
         # ==================================================
 
-        st.subheader("🔑 Reset Password")
+        if not can_manage:
 
-        new_password = st.text_input(
-            "New Password",
-            type="password",
-            key="user_action_new_password"
-        )
+            st.warning(
+                "You are not authorized to manage Developer accounts."
+            )
 
-        if st.button(
-            "🔑 Reset Password",
-            use_container_width=True,
-            key="reset_password_button"
-        ):
+        else:
 
-            if not new_password.strip():
+            st.divider()
 
-                st.error("New Password is required.")
+            # ==================================================
+            # RESET PASSWORD
+            # ==================================================
+
+            st.subheader("🔑 Reset Password")
+
+            new_password = st.text_input(
+                "New Password",
+                type="password",
+                key="reset_password_input"
+            )
+
+            if st.button(
+                "🔑 Reset Password",
+                use_container_width=True,
+                key="reset_password_button"
+            ):
+
+                if not new_password.strip():
+
+                    st.error(
+                        "New Password is required."
+                    )
+
+                else:
+
+                    ok, msg = UserService.reset_password(
+                        row_no,
+                        new_password,
+                        st.session_state.get(
+                            "username",
+                            "SYSTEM"
+                        )
+                    )
+
+                    if ok:
+
+                        st.success(msg)
+                        st.rerun()
+
+                    else:
+
+                        st.error(msg)
+
+            # ==================================================
+            # ACCOUNT ACTIONS
+            # ==================================================
+
+            st.divider()
+
+            c1, c2, c3 = st.columns(3)
+
+            with c1:
+
+                if st.button(
+                    "🟢 Enable User",
+                    use_container_width=True,
+                    key="enable_user_button"
+                ):
+
+                    ok, msg = UserService.enable_user(
+                        row_no,
+                        st.session_state.get(
+                            "username",
+                            "SYSTEM"
+                        )
+                    )
+
+                    if ok:
+
+                        st.success(msg)
+                        st.rerun()
+
+                    else:
+
+                        st.error(msg)
+
+            with c2:
+
+                if st.button(
+                    "🔴 Disable User",
+                    use_container_width=True,
+                    key="disable_user_button"
+                ):
+
+                    ok, msg = UserService.disable_user(
+                        row_no,
+                        st.session_state.get(
+                            "username",
+                            "SYSTEM"
+                        )
+                    )
+
+                    if ok:
+
+                        st.success(msg)
+                        st.rerun()
+
+                    else:
+
+                        st.error(msg)
+
+            with c3:
+
+                if st.button(
+                    "♻ Unlock Account",
+                    use_container_width=True,
+                    key="unlock_account_button"
+                ):
+
+                    ok, msg = UserService.unlock_user(
+                        row_no
+                    )
+
+                    if ok:
+
+                        st.success(msg)
+                        st.rerun()
+
+                    else:
+
+                        st.error(msg)
+
+            # ==================================================
+            # CHANGE ROLE
+            # ==================================================
+
+            st.divider()
+
+            st.subheader("🔄 Change User Role")
+
+            role_options = [
+                "Developer",
+                "Admin",
+                "Coordinator"
+            ]
+
+            if target_role in role_options:
+
+                current_role_index = role_options.index(
+                    target_role
+                )
 
             else:
 
-                ok, msg = UserService.reset_password(
+                current_role_index = 0
+
+            new_role = st.selectbox(
+                "New Role",
+                role_options,
+                index=current_role_index,
+                key="change_user_role"
+            )
+
+            if st.button(
+                "🔄 Update Role",
+                use_container_width=True,
+                key="update_role_button"
+            ):
+
+                if new_role == target_role:
+
+                    st.info(
+                        "Selected role is already assigned."
+                    )
+
+                else:
+
+                    ok, msg = UserService.change_role(
+                        row_no,
+                        new_role,
+                        st.session_state.get(
+                            "username",
+                            "SYSTEM"
+                        )
+                    )
+
+                    if ok:
+
+                        st.success(msg)
+                        st.rerun()
+
+                    else:
+
+                        st.error(msg)
+
+            # ==================================================
+            # ARCHIVE USER
+            # ==================================================
+
+            st.divider()
+
+            if st.button(
+                "🗑 Archive User",
+                use_container_width=True,
+                key="archive_user_button"
+            ):
+
+                ok, msg = UserService.soft_delete_user(
                     row_no,
-                    new_password,
                     st.session_state.get(
                         "username",
                         "SYSTEM"
@@ -393,168 +599,6 @@ with tab3:
                 else:
 
                     st.error(msg)
-
-        st.divider()
-
-        # ==================================================
-        # ENABLE / DISABLE / UNLOCK
-        # ==================================================
-
-        c1, c2, c3 = st.columns(3)
-
-        with c1:
-
-            if st.button(
-                "🟢 Enable User",
-                use_container_width=True,
-                key="enable_user_button"
-            ):
-
-                ok, msg = UserService.enable_user(
-                    row_no,
-                    st.session_state.get(
-                        "username",
-                        "SYSTEM"
-                    )
-                )
-
-                if ok:
-
-                    st.success(msg)
-                    st.rerun()
-
-                else:
-
-                    st.error(msg)
-
-        with c2:
-
-            if st.button(
-                "🔴 Disable User",
-                use_container_width=True,
-                key="disable_user_button"
-            ):
-
-                ok, msg = UserService.disable_user(
-                    row_no,
-                    st.session_state.get(
-                        "username",
-                        "SYSTEM"
-                    )
-                )
-
-                if ok:
-
-                    st.success(msg)
-                    st.rerun()
-
-                else:
-
-                    st.error(msg)
-
-        with c3:
-
-            if st.button(
-                "♻ Unlock Account",
-                use_container_width=True,
-                key="unlock_account_button"
-            ):
-
-                ok, msg = UserService.unlock_user(
-                    row_no
-                )
-
-                if ok:
-
-                    st.success(msg)
-                    st.rerun()
-
-                else:
-
-                    st.error(msg)
-
-        st.divider()
-
-        # ==================================================
-        # CHANGE ROLE
-        # ==================================================
-
-        st.subheader("🔄 Change User Role")
-
-        role_options = [
-            "Developer",
-            "Admin",
-            "Coordinator"
-        ]
-
-        current_role = selected_user.get(
-            "Role",
-            "Coordinator"
-        )
-
-        new_role = st.selectbox(
-            "New Role",
-            role_options,
-            index=(
-                role_options.index(current_role)
-                if current_role in role_options
-                else 0
-            ),
-            key="change_user_role"
-        )
-
-        if st.button(
-            "🔄 Update Role",
-            use_container_width=True,
-            key="update_role_button"
-        ):
-
-            ok, msg = UserService.change_role(
-                row_no,
-                new_role,
-                st.session_state.get(
-                    "username",
-                    "SYSTEM"
-                )
-            )
-
-            if ok:
-
-                st.success(msg)
-                st.rerun()
-
-            else:
-
-                st.error(msg)
-
-        st.divider()
-
-        # ==================================================
-        # ARCHIVE USER
-        # ==================================================
-
-        if st.button(
-            "🗑 Archive User",
-            use_container_width=True,
-            key="archive_user_button"
-        ):
-
-            ok, msg = UserService.soft_delete_user(
-                row_no,
-                st.session_state.get(
-                    "username",
-                    "SYSTEM"
-                )
-            )
-
-            if ok:
-
-                st.success(msg)
-                st.rerun()
-
-            else:
-
-                st.error(msg)
 
 
 # ==========================================================
