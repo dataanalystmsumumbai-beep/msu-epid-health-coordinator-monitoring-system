@@ -25,23 +25,38 @@ if not st.session_state.get("logged_in", False):
     st.stop()
 
 
-current_user = st.session_state.get("user", {})
-
-if not isinstance(current_user, dict):
-    current_user = {}
-
+# ============================================================
+# GET CURRENT USER
+# IMPORTANT:
+# session.py stores these as separate session_state values.
+# Do NOT use st.session_state["user"] here.
+# ============================================================
 
 current_username = str(
-    current_user.get("Username", "")
+    st.session_state.get("username", "")
 ).strip()
 
 current_role = str(
-    current_user.get("Role", "")
+    st.session_state.get("role", "")
 ).strip()
 
 current_name = str(
-    current_user.get("Full_Name", current_username)
+    st.session_state.get(
+        "full_name",
+        current_username
+    )
 ).strip()
+
+current_user_id = str(
+    st.session_state.get("user_id", "")
+).strip()
+
+
+# ============================================================
+# NORMALIZE ROLE
+# ============================================================
+
+role = current_role.lower().strip()
 
 
 # ============================================================
@@ -58,13 +73,34 @@ st.divider()
 
 
 # ============================================================
+# VALID ROLE CHECK
+# ============================================================
+
+allowed_roles = [
+    "developer",
+    "admin",
+    "coordinator"
+]
+
+if role not in allowed_roles:
+
+    st.error(
+        "⛔ You do not have permission to access Daily Review."
+    )
+
+    st.stop()
+
+
+# ============================================================
 # LOAD DAILY REVIEW DATA
 # ============================================================
 
 try:
+
     review_records = read_all(DAILY_REVIEW)
 
 except Exception as e:
+
     review_records = []
 
     st.warning(
@@ -73,14 +109,17 @@ except Exception as e:
 
 
 # ============================================================
-# COORDINATOR - SUBMIT REVIEW
+# COORDINATOR - SUBMIT DAILY REVIEW
 # ============================================================
 
-if current_role.lower() == "coordinator":
+if role == "coordinator":
 
     st.subheader("📋 Submit Daily Review")
 
-    with st.form("daily_review_form", clear_on_submit=False):
+    with st.form(
+        "daily_review_form",
+        clear_on_submit=True
+    ):
 
         col1, col2 = st.columns(2)
 
@@ -101,9 +140,9 @@ if current_role.lower() == "coordinator":
         status = st.selectbox(
             "Status",
             [
-                "Completed",
-                "Pending",
-                "In Progress"
+                "COMPLETED",
+                "PENDING",
+                "IN PROGRESS"
             ]
         )
 
@@ -130,15 +169,37 @@ if current_role.lower() == "coordinator":
 
             try:
 
+                review_id = (
+                    "REV-"
+                    + datetime.now().strftime(
+                        "%Y%m%d%H%M%S"
+                    )
+                )
+
+                current_time = datetime.now().strftime(
+                    "%d-%m-%Y %H:%M"
+                )
+
                 new_row = [
-                    datetime.now().strftime("%Y%m%d%H%M%S"),
-                    review_date.strftime("%d-%m-%Y"),
-                    current_username,
-                    current_name,
+
+                    review_id,
+
+                    review_date.strftime(
+                        "%d-%m-%Y"
+                    ),
+
+                    current_user_id,
+
                     task_name.strip(),
+
                     status,
+
                     remarks.strip(),
-                    datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+
+                    current_time,
+
+                    current_time
+
                 ]
 
                 insert_row(
@@ -147,7 +208,7 @@ if current_role.lower() == "coordinator":
                 )
 
                 st.success(
-                    "Daily Review submitted successfully."
+                    "✅ Daily Review submitted successfully."
                 )
 
                 st.rerun()
@@ -160,12 +221,17 @@ if current_role.lower() == "coordinator":
 
 
 # ============================================================
-# ADMIN / DEVELOPER VIEW
+# ADMIN / DEVELOPER - MONITORING
 # ============================================================
 
-if current_role.lower() in ["admin", "developer"]:
+if role in [
+    "admin",
+    "developer"
+]:
 
-    st.subheader("📊 Daily Review Monitoring")
+    st.subheader(
+        "📊 Daily Review Monitoring"
+    )
 
     if not review_records:
 
@@ -176,7 +242,7 @@ if current_role.lower() in ["admin", "developer"]:
     else:
 
         # ----------------------------------------------------
-        # Convert records for display
+        # BUILD DISPLAY DATA
         # ----------------------------------------------------
 
         display_records = []
@@ -185,24 +251,41 @@ if current_role.lower() in ["admin", "developer"]:
 
             display_records.append(
                 {
+                    "Review ID": record.get(
+                        "Review_ID",
+                        ""
+                    ),
+
                     "Date": record.get(
                         "Review_Date",
-                        record.get("Date", "")
+                        record.get(
+                            "Date",
+                            ""
+                        )
                     ),
 
                     "Coordinator": record.get(
-                        "Full_Name",
+                        "Coordinator_ID",
                         record.get(
                             "Coordinator_Name",
-                            record.get("Username", "")
+                            record.get(
+                                "Username",
+                                ""
+                            )
                         )
                     ),
 
                     "Task": record.get(
-                        "Task",
+                        "Task_ID",
                         record.get(
-                            "Task_Name",
-                            record.get("Activity", "")
+                            "Task",
+                            record.get(
+                                "Task_Name",
+                                record.get(
+                                    "Activity",
+                                    ""
+                                )
+                            )
                         )
                     ),
 
@@ -217,93 +300,151 @@ if current_role.lower() in ["admin", "developer"]:
                     ),
 
                     "Submitted On": record.get(
-                        "Submitted_On",
+                        "Created_On",
                         record.get(
-                            "Created_On",
+                            "Submitted_On",
                             ""
                         )
+                    ),
+
+                    "Modified On": record.get(
+                        "Modified_On",
+                        ""
                     )
                 }
             )
 
+
         # ----------------------------------------------------
-        # Metrics
+        # METRICS
         # ----------------------------------------------------
+
+        active_records = [
+            row
+            for row in display_records
+            if str(
+                row["Status"]
+            ).strip().upper() != "DELETED"
+        ]
+
+        total_count = len(active_records)
 
         completed_count = sum(
             1
-            for row in display_records
-            if str(row["Status"]).strip().lower()
-            == "completed"
+            for row in active_records
+            if str(
+                row["Status"]
+            ).strip().upper()
+            == "COMPLETED"
         )
 
         pending_count = sum(
             1
-            for row in display_records
-            if str(row["Status"]).strip().lower()
-            == "pending"
+            for row in active_records
+            if str(
+                row["Status"]
+            ).strip().upper()
+            == "PENDING"
         )
 
         in_progress_count = sum(
             1
-            for row in display_records
-            if str(row["Status"]).strip().lower()
-            == "in progress"
+            for row in active_records
+            if str(
+                row["Status"]
+            ).strip().upper()
+            == "IN PROGRESS"
         )
 
-        total_count = len(display_records)
+
+        # ----------------------------------------------------
+        # METRIC CARDS
+        # ----------------------------------------------------
 
         col1, col2, col3, col4 = st.columns(4)
 
         with col1:
+
             st.metric(
                 "Total Reviews",
                 total_count
             )
 
         with col2:
+
             st.metric(
                 "Completed",
                 completed_count
             )
 
         with col3:
+
             st.metric(
                 "Pending",
                 pending_count
             )
 
         with col4:
+
             st.metric(
                 "In Progress",
                 in_progress_count
             )
 
+
         st.divider()
 
+
         # ----------------------------------------------------
-        # Review Table
+        # COMPLETION RATE
         # ----------------------------------------------------
 
-        st.subheader("📋 Submitted Reviews")
+        if total_count > 0:
+
+            completion_rate = round(
+                (
+                    completed_count
+                    / total_count
+                ) * 100,
+                2
+            )
+
+        else:
+
+            completion_rate = 0
+
+
+        st.subheader(
+            "📈 Overall Completion"
+        )
+
+        st.progress(
+            completion_rate / 100
+        )
+
+        st.caption(
+            f"Completion Rate: {completion_rate}%"
+        )
+
+
+        st.divider()
+
+
+        # ----------------------------------------------------
+        # REVIEW TABLE
+        # ----------------------------------------------------
+
+        st.subheader(
+            "📋 Submitted Reviews"
+        )
 
         st.dataframe(
-            display_records,
+            active_records,
             use_container_width=True,
             hide_index=True
         )
 
 
 # ============================================================
-# FALLBACK FOR OTHER ROLES
+# END
 # ============================================================
-
-if current_role.lower() not in [
-    "coordinator",
-    "admin",
-    "developer"
-]:
-
-    st.warning(
-        "You do not have permission to access Daily Review."
-    )
