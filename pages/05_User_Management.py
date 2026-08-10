@@ -82,26 +82,31 @@ with tab1:
         search = st.text_input("🔍 Search User")
 
     with c2:
+        
         role_filter = st.selectbox(
-            "Role",
-            [
-                "All",
-                "Developer",
-                "Admin",
-                "Coordinator"
-            ]
-        )
+    "Role",
+    [
+        "All",
+        "Developer",
+        "Admin",
+        "Coordinator"
+    ],
+    key="user_list_role_filter"
+)
 
     with c3:
-        status_filter = st.selectbox(
-            "Status",
-            [
-                "All",
-                "ACTIVE",
-                "DISABLED",
-                "DELETED"
-            ]
-        )
+        
+    status_filter = st.selectbox(
+    "Status",
+    [
+        "All",
+        "ACTIVE",
+        "DISABLED",
+        "DELETED"
+    ],
+    key="user_list_status_filter"
+)
+        
 
     filtered = users
 
@@ -189,13 +194,14 @@ with tab2:
     )
 
     role = st.selectbox(
-        "Role",
-        [
-            "Developer",
-            "Admin",
-            "Coordinator"
-        ]
-    )
+    "Role",
+    [
+        "Developer",
+        "Admin",
+        "Coordinator"
+    ],
+    key="create_user_role"
+)
 
     full_name = st.text_input(
         "Full Name"
@@ -344,36 +350,38 @@ with tab3:
             )
 
             role = st.selectbox(
-                "Role",
-                [
-                    "Developer",
-                    "Admin",
-                    "Coordinator"
-                ],
-                index=[
-                    "Developer",
-                    "Admin",
-                    "Coordinator"
-                ].index(
-                    selected_user.get("Role", "Coordinator")
-                )
-            )
+    "Role",
+    [
+        "Developer",
+        "Admin",
+        "Coordinator"
+    ],
+    index=[
+        "Developer",
+        "Admin",
+        "Coordinator"
+    ].index(
+        selected_user.get("Role", "Coordinator")
+    ),
+    key="user_action_role"
+)
 
             status = st.selectbox(
-                "Status",
-                [
-                    "ACTIVE",
-                    "INACTIVE",
-                    "DELETED"
-                ],
-                index=[
-                    "ACTIVE",
-                    "INACTIVE",
-                    "DELETED"
-                ].index(
-                    selected_user.get("Status", "ACTIVE")
-                )
-            )
+    "Status",
+    [
+        "ACTIVE",
+        "INACTIVE",
+        "DELETED"
+    ],
+    index=[
+        "ACTIVE",
+        "INACTIVE",
+        "DELETED"
+    ].index(
+        selected_user.get("Status", "ACTIVE")
+    ),
+    key="user_action_status"
+)
 
         st.divider()
 
