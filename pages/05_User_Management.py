@@ -284,16 +284,6 @@ with tab2:
 # User Actions
 # ==========================================================
 
-# ==========================================================
-# PART 1
-# Replace ONLY this section inside:
-#
-# with tab3:
-#
-# Remove everything inside "with tab3:"
-# and paste the following.
-# ==========================================================
-
 with tab3:
 
     st.subheader("⚙ User Actions")
@@ -312,7 +302,8 @@ with tab3:
         selected = st.selectbox(
             "Select User",
             range(len(user_names)),
-            format_func=lambda x: user_names[x]
+            format_func=lambda x: user_names[x],
+            key="user_action_select"
         )
 
         selected_user = users[selected]
@@ -329,92 +320,100 @@ with tab3:
 
             full_name = st.text_input(
                 "Full Name",
-                value=selected_user.get("Full_Name", "")
+                value=selected_user.get("Full_Name", ""),
+                key="user_action_full_name"
             )
 
             designation = st.text_input(
                 "Designation",
-                value=selected_user.get("Designation", "")
+                value=selected_user.get("Designation", ""),
+                key="user_action_designation"
             )
 
             mobile = st.text_input(
                 "Mobile",
-                value=selected_user.get("Mobile", "")
+                value=selected_user.get("Mobile", ""),
+                key="user_action_mobile"
             )
 
         with c2:
 
             email = st.text_input(
                 "Email",
-                value=selected_user.get("Email", "")
+                value=selected_user.get("Email", ""),
+                key="user_action_email"
+            )
+
+            role_options = [
+                "Developer",
+                "Admin",
+                "Coordinator"
+            ]
+
+            current_role = selected_user.get(
+                "Role",
+                "Coordinator"
             )
 
             role = st.selectbox(
-    "Role",
-    [
-        "Developer",
-        "Admin",
-        "Coordinator"
-    ],
-    index=[
-        "Developer",
-        "Admin",
-        "Coordinator"
-    ].index(
-        selected_user.get("Role", "Coordinator")
-    ),
-    key="user_action_role"
-)
+                "Role",
+                role_options,
+                index=(
+                    role_options.index(current_role)
+                    if current_role in role_options
+                    else 0
+                ),
+                key="user_action_role"
+            )
+
+            status_options = [
+                "ACTIVE",
+                "INACTIVE",
+                "DELETED"
+            ]
+
+            current_status = str(
+                selected_user.get(
+                    "Status",
+                    "ACTIVE"
+                )
+            ).upper()
 
             status = st.selectbox(
-    "Status",
-    [
-        "ACTIVE",
-        "INACTIVE",
-        "DELETED"
-    ],
-    index=[
-        "ACTIVE",
-        "INACTIVE",
-        "DELETED"
-    ].index(
-        selected_user.get("Status", "ACTIVE")
-    ),
-    key="user_action_status"
-)
+                "Status",
+                status_options,
+                index=(
+                    status_options.index(current_status)
+                    if current_status in status_options
+                    else 0
+                ),
+                key="user_action_status"
+            )
 
         st.divider()
 
         if st.button(
             "💾 Update User",
-            use_container_width=True
+            use_container_width=True,
+            key="update_user_button"
         ):
 
             ok, msg = UserService.update_user(
-
                 row_no=row_no,
-
                 full_name=full_name,
-
                 designation=designation,
-
                 mobile=mobile,
-
                 email=email,
-
                 role=role,
-
                 modified_by=st.session_state.get(
                     "username",
                     "SYSTEM"
                 )
-
             )
 
             if ok:
 
                 st.success(msg)
-
                 st.rerun()
 
             else:
@@ -427,36 +426,39 @@ with tab3:
 
         new_password = st.text_input(
             "New Password",
-            type="password"
+            type="password",
+            key="user_action_new_password"
         )
 
         if st.button(
-            "Reset Password",
-            use_container_width=True
+            "🔑 Reset Password",
+            use_container_width=True,
+            key="reset_password_button"
         ):
 
-            ok, msg = UserService.reset_password(
+            if not new_password.strip():
 
-                row_no,
-
-                new_password,
-
-                st.session_state.get(
-                    "username",
-                    "SYSTEM"
-                )
-
-            )
-
-            if ok:
-
-                st.success(msg)
-
-                st.rerun()
+                st.error("New Password is required.")
 
             else:
 
-                st.error(msg)
+                ok, msg = UserService.reset_password(
+                    row_no,
+                    new_password,
+                    st.session_state.get(
+                        "username",
+                        "SYSTEM"
+                    )
+                )
+
+                if ok:
+
+                    st.success(msg)
+                    st.rerun()
+
+                else:
+
+                    st.error(msg)
 
         st.divider()
 
@@ -466,55 +468,58 @@ with tab3:
 
             if st.button(
                 "🟢 Enable User",
-                use_container_width=True
+                use_container_width=True,
+                key="enable_user_button"
             ):
 
                 ok, msg = UserService.enable_user(
-
                     row_no,
-
                     st.session_state.get(
                         "username",
                         "SYSTEM"
                     )
-
                 )
 
                 if ok:
 
                     st.success(msg)
-
                     st.rerun()
+
+                else:
+
+                    st.error(msg)
 
         with c2:
 
             if st.button(
                 "🔴 Disable User",
-                use_container_width=True
+                use_container_width=True,
+                key="disable_user_button"
             ):
 
                 ok, msg = UserService.disable_user(
-
                     row_no,
-
                     st.session_state.get(
                         "username",
                         "SYSTEM"
                     )
-
                 )
 
                 if ok:
 
                     st.success(msg)
-
                     st.rerun()
+
+                else:
+
+                    st.error(msg)
 
         with c3:
 
             if st.button(
                 "♻ Unlock Account",
-                use_container_width=True
+                use_container_width=True,
+                key="unlock_account_button"
             ):
 
                 ok, msg = UserService.unlock_user(row_no)
@@ -522,52 +527,58 @@ with tab3:
                 if ok:
 
                     st.success(msg)
-
                     st.rerun()
+
+                else:
+
+                    st.error(msg)
 
         st.divider()
 
         st.subheader("🔄 Change Role")
 
+        new_role_options = [
+            "Developer",
+            "Admin",
+            "Coordinator"
+        ]
+
+        current_role_for_change = selected_user.get(
+            "Role",
+            "Coordinator"
+        )
+
         new_role = st.selectbox(
             "New Role",
-            [
-                "Developer",
-                "Admin",
-                "Coordinator"
-            ],
-            index=[
-                "Developer",
-                "Admin",
-                "Coordinator"
-            ].index(
-                selected_user.get("Role", "Coordinator")
+            new_role_options,
+            index=(
+                new_role_options.index(
+                    current_role_for_change
+                )
+                if current_role_for_change in new_role_options
+                else 0
             ),
-            key="change_role"
+            key="change_user_role"
         )
 
         if st.button(
             "🔄 Update Role",
-            use_container_width=True
+            use_container_width=True,
+            key="update_role_button"
         ):
 
             ok, msg = UserService.change_role(
-
                 row_no,
-
                 new_role,
-
                 st.session_state.get(
                     "username",
                     "SYSTEM"
                 )
-
             )
 
             if ok:
 
                 st.success(msg)
-
                 st.rerun()
 
             else:
@@ -578,29 +589,27 @@ with tab3:
 
         if st.button(
             "🗑 Archive User",
-            use_container_width=True
+            use_container_width=True,
+            key="archive_user_button"
         ):
 
             ok, msg = UserService.soft_delete_user(
-
                 row_no,
-
                 st.session_state.get(
                     "username",
                     "SYSTEM"
                 )
-
             )
 
             if ok:
 
                 st.success(msg)
-
                 st.rerun()
 
             else:
 
                 st.error(msg)
+
 
 # ==========================================================
 # Footer
