@@ -295,7 +295,7 @@ with tab3:
     else:
 
         user_names = [
-            f"{u.get('Username')} ({u.get('Role')})"
+            f"{u.get('Username', '')} ({u.get('Role', '')})"
             for u in users
         ]
 
@@ -312,115 +312,49 @@ with tab3:
 
         st.divider()
 
-        st.markdown("### 👤 User Information")
+        # ==================================================
+        # USER INFORMATION
+        # ==================================================
 
         c1, c2 = st.columns(2)
 
         with c1:
 
-            full_name = st.text_input(
-                "Full Name",
-                value=selected_user.get("Full_Name", ""),
-                key="user_action_full_name"
+            st.write(
+                f"**Username :** {selected_user.get('Username', '')}"
             )
 
-            designation = st.text_input(
-                "Designation",
-                value=selected_user.get("Designation", ""),
-                key="user_action_designation"
+            st.write(
+                f"**Full Name :** {selected_user.get('Full_Name', '')}"
             )
 
-            mobile = st.text_input(
-                "Mobile",
-                value=selected_user.get("Mobile", ""),
-                key="user_action_mobile"
+            st.write(
+                f"**Role :** {selected_user.get('Role', '')}"
+            )
+
+            st.write(
+                f"**Status :** {selected_user.get('Status', '')}"
             )
 
         with c2:
 
-            email = st.text_input(
-                "Email",
-                value=selected_user.get("Email", ""),
-                key="user_action_email"
+            st.write(
+                f"**Designation :** {selected_user.get('Designation', '')}"
             )
 
-            role_options = [
-                "Developer",
-                "Admin",
-                "Coordinator"
-            ]
-
-            current_role = selected_user.get(
-                "Role",
-                "Coordinator"
+            st.write(
+                f"**Mobile :** {selected_user.get('Mobile', '')}"
             )
 
-            role = st.selectbox(
-                "Role",
-                role_options,
-                index=(
-                    role_options.index(current_role)
-                    if current_role in role_options
-                    else 0
-                ),
-                key="user_action_role"
-            )
-
-            status_options = [
-                "ACTIVE",
-                "INACTIVE",
-                "DELETED"
-            ]
-
-            current_status = str(
-                selected_user.get(
-                    "Status",
-                    "ACTIVE"
-                )
-            ).upper()
-
-            status = st.selectbox(
-                "Status",
-                status_options,
-                index=(
-                    status_options.index(current_status)
-                    if current_status in status_options
-                    else 0
-                ),
-                key="user_action_status"
+            st.write(
+                f"**Email :** {selected_user.get('Email', '')}"
             )
 
         st.divider()
 
-        if st.button(
-            "💾 Update User",
-            use_container_width=True,
-            key="update_user_button"
-        ):
-
-            ok, msg = UserService.update_user(
-                row_no=row_no,
-                full_name=full_name,
-                designation=designation,
-                mobile=mobile,
-                email=email,
-                role=role,
-                modified_by=st.session_state.get(
-                    "username",
-                    "SYSTEM"
-                )
-            )
-
-            if ok:
-
-                st.success(msg)
-                st.rerun()
-
-            else:
-
-                st.error(msg)
-
-        st.divider()
+        # ==================================================
+        # RESET PASSWORD
+        # ==================================================
 
         st.subheader("🔑 Reset Password")
 
@@ -461,6 +395,10 @@ with tab3:
                     st.error(msg)
 
         st.divider()
+
+        # ==================================================
+        # ENABLE / DISABLE / UNLOCK
+        # ==================================================
 
         c1, c2, c3 = st.columns(3)
 
@@ -522,7 +460,9 @@ with tab3:
                 key="unlock_account_button"
             ):
 
-                ok, msg = UserService.unlock_user(row_no)
+                ok, msg = UserService.unlock_user(
+                    row_no
+                )
 
                 if ok:
 
@@ -535,27 +475,29 @@ with tab3:
 
         st.divider()
 
-        st.subheader("🔄 Change Role")
+        # ==================================================
+        # CHANGE ROLE
+        # ==================================================
 
-        new_role_options = [
+        st.subheader("🔄 Change User Role")
+
+        role_options = [
             "Developer",
             "Admin",
             "Coordinator"
         ]
 
-        current_role_for_change = selected_user.get(
+        current_role = selected_user.get(
             "Role",
             "Coordinator"
         )
 
         new_role = st.selectbox(
             "New Role",
-            new_role_options,
+            role_options,
             index=(
-                new_role_options.index(
-                    current_role_for_change
-                )
-                if current_role_for_change in new_role_options
+                role_options.index(current_role)
+                if current_role in role_options
                 else 0
             ),
             key="change_user_role"
@@ -586,6 +528,10 @@ with tab3:
                 st.error(msg)
 
         st.divider()
+
+        # ==================================================
+        # ARCHIVE USER
+        # ==================================================
 
         if st.button(
             "🗑 Archive User",
