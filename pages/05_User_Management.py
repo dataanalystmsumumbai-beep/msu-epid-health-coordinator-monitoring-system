@@ -22,7 +22,10 @@ require_login(["Developer", "Admin"])
 # ==========================================================
 
 st.title("👥 User Management")
-st.caption("Create, Edit, Enable, Disable & Manage Users")
+
+st.caption(
+    "Create, Edit, Enable, Disable & Manage Users"
+)
 
 st.divider()
 
@@ -69,6 +72,7 @@ with c4:
         stats["coordinators"]
     )
 
+
 st.divider()
 
 
@@ -99,7 +103,7 @@ with tab1:
 
         search = st.text_input(
             "🔍 Search User",
-            key="user_list_search"
+            key="user_search"
         )
 
     with c2:
@@ -112,7 +116,7 @@ with tab1:
                 "Admin",
                 "Coordinator"
             ],
-            key="user_list_role_filter"
+            key="user_role_filter"
         )
 
     with c3:
@@ -125,59 +129,109 @@ with tab1:
                 "INACTIVE",
                 "DELETED"
             ],
-            key="user_list_status_filter"
+            key="user_status_filter"
         )
 
     filtered = users
 
     if search.strip():
 
-        txt = search.lower().strip()
+        search_text = search.strip().lower()
 
         filtered = [
-            u
-            for u in filtered
+
+            user
+
+            for user in filtered
+
             if (
-                txt in str(
-                    u.get("Username", "")
+
+                search_text
+                in str(
+                    user.get(
+                        "Username",
+                        ""
+                    )
                 ).lower()
+
                 or
-                txt in str(
-                    u.get("Full_Name", "")
+
+                search_text
+                in str(
+                    user.get(
+                        "Full_Name",
+                        ""
+                    )
                 ).lower()
+
                 or
-                txt in str(
-                    u.get("Designation", "")
+
+                search_text
+                in str(
+                    user.get(
+                        "Designation",
+                        ""
+                    )
                 ).lower()
+
                 or
-                txt in str(
-                    u.get("Mobile", "")
+
+                search_text
+                in str(
+                    user.get(
+                        "Mobile",
+                        ""
+                    )
                 ).lower()
+
                 or
-                txt in str(
-                    u.get("Email", "")
+
+                search_text
+                in str(
+                    user.get(
+                        "Email",
+                        ""
+                    )
                 ).lower()
+
             )
+
         ]
 
     if role_filter != "All":
 
         filtered = [
-            u
-            for u in filtered
+
+            user
+
+            for user in filtered
+
             if str(
-                u.get("Role", "")
-            ).strip() == role_filter
+                user.get(
+                    "Role",
+                    ""
+                )
+            ).strip()
+            == role_filter
+
         ]
 
     if status_filter != "All":
 
         filtered = [
-            u
-            for u in filtered
+
+            user
+
+            for user in filtered
+
             if str(
-                u.get("Status", "")
-            ).strip().upper() == status_filter
+                user.get(
+                    "Status",
+                    ""
+                )
+            ).strip().upper()
+            == status_filter
+
         ]
 
     if filtered:
@@ -190,10 +244,12 @@ with tab1:
 
     else:
 
-        st.info("No users found.")
+        st.info(
+            "No users found."
+        )
 
-    st.info(
-        f"Showing {len(filtered)} of {len(users)} Users"
+    st.caption(
+        f"Showing {len(filtered)} of {len(users)} users"
     )
 
 
@@ -223,7 +279,7 @@ with tab2:
             "Admin",
             "Coordinator"
         ],
-        key="create_user_role"
+        key="create_role"
     )
 
     full_name = st.text_input(
@@ -258,7 +314,7 @@ with tab2:
         create_btn = st.button(
             "✅ Create User",
             use_container_width=True,
-            key="create_user_button"
+            key="create_user_btn"
         )
 
     with c2:
@@ -266,7 +322,7 @@ with tab2:
         clear_btn = st.button(
             "🔄 Clear",
             use_container_width=True,
-            key="clear_user_button"
+            key="clear_user_btn"
         )
 
     if create_btn:
@@ -278,11 +334,10 @@ with tab2:
             )
         ).strip()
 
-        # --------------------------------------------------
-        # ROLE CREATION PERMISSION
-        # --------------------------------------------------
-
-        if current_role == "Admin" and role == "Developer":
+        if (
+            current_role == "Admin"
+            and role == "Developer"
+        ):
 
             st.error(
                 "Admin cannot create Developer accounts."
@@ -291,22 +346,32 @@ with tab2:
         else:
 
             status, message = UserService.create_user(
+
                 username=username,
+
                 password=password,
+
                 role=role,
+
                 full_name=full_name,
+
                 designation=designation,
+
                 mobile=mobile,
+
                 email=email,
+
                 created_by=st.session_state.get(
                     "username",
                     "SYSTEM"
                 )
+
             )
 
             if status:
 
                 st.success(message)
+
                 st.rerun()
 
             else:
@@ -328,24 +393,32 @@ with tab3:
 
     if not users:
 
-        st.warning("No Users Found.")
+        st.warning(
+            "No Users Found."
+        )
 
     else:
 
-        # --------------------------------------------------
-        # USER SELECTION
-        # --------------------------------------------------
-
         user_names = [
-            f"{u.get('Username', '')} ({u.get('Role', '')})"
-            for u in users
+
+            f"{user.get('Username', '')} "
+            f"({user.get('Role', '')})"
+
+            for user in users
+
         ]
 
         selected_index = st.selectbox(
+
             "Select User",
+
             range(len(user_names)),
-            format_func=lambda x: user_names[x],
-            key="user_action_select"
+
+            format_func=lambda x:
+            user_names[x],
+
+            key="selected_user"
+
         )
 
         selected_user = users[selected_index]
@@ -380,10 +453,6 @@ with tab3:
             )
         ).strip()
 
-        # --------------------------------------------------
-        # MANAGEMENT PERMISSION
-        # --------------------------------------------------
-
         can_manage = False
 
         if current_role == "Developer":
@@ -399,18 +468,12 @@ with tab3:
 
                 can_manage = True
 
-        # Prevent user from managing own account
         if (
             target_username.lower()
-            ==
-            logged_username.lower()
+            == logged_username.lower()
         ):
 
             can_manage = False
-
-        # --------------------------------------------------
-        # USER INFORMATION
-        # --------------------------------------------------
 
         st.divider()
 
@@ -460,20 +523,15 @@ with tab3:
                 f"{selected_user.get('Account_Locked', '')}"
             )
 
-        # --------------------------------------------------
-        # PERMISSION MESSAGE
-        # --------------------------------------------------
-
         if not can_manage:
 
             if (
                 target_username.lower()
-                ==
-                logged_username.lower()
+                == logged_username.lower()
             ):
 
                 st.info(
-                    "You cannot manage your own account from this page."
+                    "You cannot manage your own account."
                 )
 
             elif (
@@ -488,29 +546,32 @@ with tab3:
             else:
 
                 st.warning(
-                    "You are not authorized to manage this account."
+                    "You are not authorized "
+                    "to manage this account."
                 )
 
         else:
 
             # ==================================================
-            # RESET PASSWORD
+            # PASSWORD RESET
             # ==================================================
 
             st.divider()
 
-            st.subheader("🔑 Reset Password")
+            st.subheader(
+                "🔑 Reset Password"
+            )
 
             new_password = st.text_input(
                 "New Password",
                 type="password",
-                key="reset_password_input"
+                key="new_password"
             )
 
             if st.button(
                 "🔑 Reset Password",
                 use_container_width=True,
-                key="reset_password_button"
+                key="reset_password"
             ):
 
                 if not new_password.strip():
@@ -522,22 +583,28 @@ with tab3:
                 else:
 
                     ok, msg = UserService.reset_password(
+
                         row_no,
+
                         new_password,
+
                         st.session_state.get(
                             "username",
                             "SYSTEM"
                         )
+
                     )
 
                     if ok:
 
                         st.success(msg)
+
                         st.rerun()
 
                     else:
 
                         st.error(msg)
+
 
             # ==================================================
             # ACCOUNT ACTIONS
@@ -545,7 +612,9 @@ with tab3:
 
             st.divider()
 
-            st.subheader("🔐 Account Actions")
+            st.subheader(
+                "🔐 Account Actions"
+            )
 
             c1, c2, c3 = st.columns(3)
 
@@ -554,20 +623,24 @@ with tab3:
                 if st.button(
                     "🟢 Enable User",
                     use_container_width=True,
-                    key="enable_user_button"
+                    key="enable_user"
                 ):
 
                     ok, msg = UserService.enable_user(
+
                         row_no,
+
                         st.session_state.get(
                             "username",
                             "SYSTEM"
                         )
+
                     )
 
                     if ok:
 
                         st.success(msg)
+
                         st.rerun()
 
                     else:
@@ -579,20 +652,24 @@ with tab3:
                 if st.button(
                     "🔴 Disable User",
                     use_container_width=True,
-                    key="disable_user_button"
+                    key="disable_user"
                 ):
 
                     ok, msg = UserService.disable_user(
+
                         row_no,
+
                         st.session_state.get(
                             "username",
                             "SYSTEM"
                         )
+
                     )
 
                     if ok:
 
                         st.success(msg)
+
                         st.rerun()
 
                     else:
@@ -604,7 +681,7 @@ with tab3:
                 if st.button(
                     "♻ Unlock Account",
                     use_container_width=True,
-                    key="unlock_account_button"
+                    key="unlock_user"
                 ):
 
                     ok, msg = UserService.unlock_user(
@@ -614,19 +691,23 @@ with tab3:
                     if ok:
 
                         st.success(msg)
+
                         st.rerun()
 
                     else:
 
                         st.error(msg)
 
+
             # ==================================================
-            # CHANGE ROLE
+            # ROLE CHANGE
             # ==================================================
 
             st.divider()
 
-            st.subheader("🔄 Change User Role")
+            st.subheader(
+                "🔄 Change User Role"
+            )
 
             if current_role == "Developer":
 
@@ -645,25 +726,30 @@ with tab3:
 
             if target_role in role_options:
 
-                current_role_index = role_options.index(
+                role_index = role_options.index(
                     target_role
                 )
 
             else:
 
-                current_role_index = 0
+                role_index = 0
 
             new_role = st.selectbox(
+
                 "New Role",
+
                 role_options,
-                index=current_role_index,
-                key="change_user_role"
+
+                index=role_index,
+
+                key="new_user_role"
+
             )
 
             if st.button(
                 "🔄 Update Role",
                 use_container_width=True,
-                key="update_role_button"
+                key="update_user_role"
             ):
 
                 if new_role == target_role:
@@ -675,22 +761,28 @@ with tab3:
                 else:
 
                     ok, msg = UserService.change_role(
+
                         row_no,
+
                         new_role,
+
                         st.session_state.get(
                             "username",
                             "SYSTEM"
                         )
+
                     )
 
                     if ok:
 
                         st.success(msg)
+
                         st.rerun()
 
                     else:
 
                         st.error(msg)
+
 
             # ==================================================
             # ARCHIVE USER
@@ -701,20 +793,24 @@ with tab3:
             if st.button(
                 "🗑 Archive User",
                 use_container_width=True,
-                key="archive_user_button"
+                key="archive_user"
             ):
 
                 ok, msg = UserService.soft_delete_user(
+
                     row_no,
+
                     st.session_state.get(
                         "username",
                         "SYSTEM"
                     )
+
                 )
 
                 if ok:
 
                     st.success(msg)
+
                     st.rerun()
 
                 else:
@@ -729,5 +825,6 @@ with tab3:
 st.divider()
 
 st.caption(
-    "MSU / EPID Health Coordinator Monitoring System | User Management"
+    "MSU / EPID Health Coordinator Monitoring System "
+    "| User Management"
 )
