@@ -1,30 +1,16 @@
 import streamlit as st
 
+from core.navigation import require_login
+
 from config.config import (
     ROLE_DEVELOPER,
     ROLE_ADMIN,
-    APP_NAME,
-    APP_VERSION,
-    APP_OWNER,
-    APP_ENVIRONMENT,
-    AUTO_REFRESH_SECONDS,
-    SESSION_TIMEOUT_MINUTES,
-    MAX_LOGIN_ATTEMPTS,
-    PASSWORD_MIN_LENGTH,
-    PASSWORD_MAX_LENGTH,
-    ROLES
+    ROLE_COORDINATOR
 )
-
-from utils.google_sheet import (
-    read_all,
-    update_value
-)
-
-from config.config import SYSTEM_SETTINGS
 
 
 # ==========================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ==========================================================
 
 st.set_page_config(
@@ -35,102 +21,73 @@ st.set_page_config(
 
 
 # ==========================================================
-# LOGIN CHECK
+# ACCESS
 # ==========================================================
 
-if (
-    "logged_in" not in st.session_state
-    or not st.session_state.logged_in
-):
-
-    st.error("Please login first.")
-    st.stop()
+require_login([
+    ROLE_DEVELOPER,
+    ROLE_ADMIN
+])
 
 
 # ==========================================================
-# CURRENT USER
+# SESSION
 # ==========================================================
-
-current_user = st.session_state.get(
-    "user",
-    {}
-)
 
 current_role = str(
-    current_user.get(
-        "Role",
+    st.session_state.get(
+        "role",
+        ""
+    )
+).strip()
+
+current_username = str(
+    st.session_state.get(
+        "username",
         ""
     )
 ).strip()
 
 
 # ==========================================================
-# ACCESS CONTROL
-# ==========================================================
-
-if current_role not in [
-    ROLE_DEVELOPER,
-    ROLE_ADMIN
-]:
-
-    st.error(
-        "Only Developer and Admin users can access System Settings."
-    )
-
-    st.stop()
-
-
-# ==========================================================
 # HEADER
 # ==========================================================
 
-st.title(
-    "⚙️ System Settings"
-)
+st.title("⚙️ System Settings")
 
 st.caption(
-    "Application configuration and system information"
+    f"User: {current_username} | Role: {current_role}"
 )
 
 st.divider()
 
 
 # ==========================================================
-# APPLICATION INFORMATION
+# SYSTEM INFORMATION
 # ==========================================================
 
-st.subheader(
-    "🏥 Application Information"
-)
+st.subheader("🖥️ System Information")
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3 = st.columns(3)
 
 with c1:
-
     st.metric(
-        "Application",
-        APP_NAME
+        "Current Role",
+        current_role
     )
 
 with c2:
-
     st.metric(
-        "Version",
-        APP_VERSION
+        "Access Level",
+        "Full"
+        if current_role.lower() == "developer"
+        else "Operational"
     )
 
 with c3:
-
     st.metric(
-        "Owner",
-        APP_OWNER
-    )
-
-with c4:
-
-    st.metric(
-        "Environment",
-        APP_ENVIRONMENT
+        "System Status",
+        "🟢 Active"
     )
 
 
@@ -138,240 +95,275 @@ st.divider()
 
 
 # ==========================================================
-# SECURITY SETTINGS
+# SETTINGS TABS
 # ==========================================================
 
-st.subheader(
-    "🔐 Security Settings"
-)
-
-s1, s2, s3, s4 = st.columns(4)
-
-with s1:
-
-    st.metric(
-        "Min Password Length",
-        PASSWORD_MIN_LENGTH
-    )
-
-with s2:
-
-    st.metric(
-        "Max Password Length",
-        PASSWORD_MAX_LENGTH
-    )
-
-with s3:
-
-    st.metric(
-        "Max Login Attempts",
-        MAX_LOGIN_ATTEMPTS
-    )
-
-with s4:
-
-    st.metric(
-        "Session Timeout",
-        f"{SESSION_TIMEOUT_MINUTES} min"
-    )
-
-
-st.divider()
-
-
-# ==========================================================
-# DASHBOARD SETTINGS
-# ==========================================================
-
-st.subheader(
-    "📊 Dashboard Settings"
-)
-
-st.info(
-    f"Automatic dashboard refresh interval: "
-    f"{AUTO_REFRESH_SECONDS} seconds"
+tab_general, tab_permissions, tab_display = st.tabs(
+    [
+        "⚙️ General",
+        "🔐 Permissions",
+        "🎨 Display"
+    ]
 )
 
 
-st.divider()
-
-
 # ==========================================================
-# ROLE PERMISSIONS
+# GENERAL SETTINGS
 # ==========================================================
 
-st.subheader(
-    "👤 Role Permissions"
-)
+with tab_general:
 
-
-permission_rows = [
-
-    {
-        "Role": "Developer",
-        "User Management": "Admin + Coordinator",
-        "Task Management": "Full",
-        "Daily Review": "Full",
-        "System Settings": "Full"
-    },
-
-    {
-        "Role": "Admin",
-        "User Management": "Coordinator",
-        "Task Management": "Full",
-        "Daily Review": "Monitoring",
-        "System Settings": "View"
-    },
-
-    {
-        "Role": "Coordinator",
-        "User Management": "No",
-        "Task Management": "Assigned Tasks",
-        "Daily Review": "Submit Own Review",
-        "System Settings": "No"
-    }
-
-]
-
-
-st.dataframe(
-    permission_rows,
-    use_container_width=True,
-    hide_index=True
-)
-
-
-st.divider()
-
-
-# ==========================================================
-# GOOGLE SHEET SYSTEM SETTINGS
-# ==========================================================
-
-st.subheader(
-    "🗄️ Database System Settings"
-)
-
-
-try:
-
-    system_settings = read_all(
-        SYSTEM_SETTINGS
+    st.subheader(
+        "⚙️ General Settings"
     )
-
-except Exception as e:
-
-    system_settings = []
-
-    st.warning(
-        f"Unable to load System Settings sheet: {e}"
-    )
-
-
-if system_settings:
-
-    st.dataframe(
-        system_settings,
-        use_container_width=True,
-        hide_index=True
-    )
-
-else:
 
     st.info(
-        "No configurable System Settings records found."
+        "These settings control the general behaviour of the portal."
     )
+
+    portal_name = st.text_input(
+        "Portal Name",
+        value="Coordinator Monitoring & Task Management System",
+        key="portal_name"
+    )
+
+    default_priority = st.selectbox(
+        "Default Task Priority",
+        [
+            "Low",
+            "Medium",
+            "High",
+            "Critical"
+        ],
+        index=1,
+        key="default_priority"
+    )
+
+    default_status = st.selectbox(
+        "Default Task Status",
+        [
+            "Pending",
+            "In Progress",
+            "Completed"
+        ],
+        index=0,
+        key="default_task_status"
+    )
+
+    enable_notifications = st.toggle(
+        "Enable Notifications",
+        value=True,
+        key="enable_notifications"
+    )
+
+    enable_daily_review = st.toggle(
+        "Enable Daily Review",
+        value=True,
+        key="enable_daily_review"
+    )
+
+    if st.button(
+        "💾 Save General Settings",
+        type="primary",
+        use_container_width=True,
+        key="save_general_settings"
+    ):
+
+        st.success(
+            "General settings saved for this session."
+        )
+
+
+# ==========================================================
+# PERMISSIONS
+# ==========================================================
+
+with tab_permissions:
+
+    st.subheader(
+        "🔐 Role Permissions"
+    )
+
+
+    permission_data = {
+
+        "Permission": [
+
+            "Manage Admin Users",
+            "Manage Coordinator Users",
+            "Change Admin Password",
+            "Change Coordinator Password",
+            "Assign Tasks",
+            "Submit Daily Review",
+            "Monitor Daily Reviews",
+            "View System Settings"
+
+        ],
+
+        "Developer": [
+
+            "✅ Yes",
+            "✅ Yes",
+            "✅ Yes",
+            "✅ Yes",
+            "✅ Yes",
+            "❌ No",
+            "✅ Yes",
+            "✅ Yes"
+
+        ],
+
+        "Admin": [
+
+            "❌ No",
+            "✅ Yes",
+            "❌ No",
+            "✅ Yes",
+            "✅ Yes",
+            "❌ No",
+            "✅ Yes",
+            "⚠️ Limited"
+
+        ],
+
+        "Coordinator": [
+
+            "❌ No",
+            "❌ No",
+            "❌ No",
+            "❌ No",
+            "❌ No",
+            "✅ Yes",
+            "❌ No",
+            "❌ No"
+
+        ]
+    }
+
+
+    st.table(
+        permission_data
+    )
+
+
+    st.divider()
+
+
+    if current_role.lower() == "developer":
+
+        st.success(
+            """
+            Developer has full system-management access.
+            """
+        )
+
+    else:
+
+        st.info(
+            """
+            Admin has operational-management access.
+            Developer-only system controls are restricted.
+            """
+        )
+
+
+# ==========================================================
+# DISPLAY
+# ==========================================================
+
+with tab_display:
+
+    st.subheader(
+        "🎨 Display Settings"
+    )
+
+    compact_mode = st.toggle(
+        "Compact Dashboard Mode",
+        value=False,
+        key="compact_mode"
+    )
+
+    show_help_text = st.toggle(
+        "Show Help Text",
+        value=True,
+        key="show_help_text"
+    )
+
+    show_status_icons = st.toggle(
+        "Show Status Icons",
+        value=True,
+        key="show_status_icons"
+    )
+
+    if st.button(
+        "💾 Save Display Settings",
+        type="primary",
+        use_container_width=True,
+        key="save_display_settings"
+    ):
+
+        st.success(
+            "Display settings saved for this session."
+        )
 
 
 st.divider()
 
 
 # ==========================================================
-# SYSTEM HEALTH
+# DEVELOPER SYSTEM CONTROLS
 # ==========================================================
 
-st.subheader(
-    "🟢 System Health"
-)
+if current_role.lower() == "developer":
 
-
-h1, h2, h3, h4 = st.columns(4)
-
-
-with h1:
-
-    st.success(
-        "Authentication"
+    st.subheader(
+        "🛠️ Developer Controls"
     )
 
-with h2:
-
-    st.success(
-        "Google Sheets"
+    st.warning(
+        "These controls are intended only for the system Developer."
     )
 
-with h3:
-
-    st.success(
-        "Task Management"
+    clear_cache = st.button(
+        "🧹 Clear Application Cache",
+        use_container_width=True,
+        key="clear_application_cache"
     )
 
-with h4:
+    if clear_cache:
 
-    st.success(
-        "Daily Review"
+        st.cache_data.clear()
+        st.cache_resource.clear()
+
+        st.success(
+            "Application cache cleared successfully."
+        )
+
+        st.rerun()
+
+
+    st.divider()
+
+
+    st.subheader(
+        "🔄 Application Refresh"
     )
 
+    if st.button(
+        "🔄 Refresh Application",
+        use_container_width=True,
+        key="refresh_application"
+    ):
+
+        st.rerun()
+
+
+# ==========================================================
+# FOOTER
+# ==========================================================
 
 st.divider()
 
-
-# ==========================================================
-# CONFIGURATION NOTES
-# ==========================================================
-
-st.subheader(
-    "ℹ️ Configuration Notes"
-)
-
-st.markdown(
-    """
-    **Important**
-
-    - Google credentials are stored securely in Streamlit Secrets.
-    - User passwords are stored as password hashes.
-    - Failed login attempts are tracked.
-    - Locked accounts can be reset by authorized users.
-    - Developer can manage Admin and Coordinator passwords.
-    - Admin can manage Coordinator passwords.
-    - Coordinators can submit Daily Reviews for their assigned tasks.
-    - Task assignment status is linked with Daily Review submission.
-    """
-)
-
-
-st.divider()
-
-
-# ==========================================================
-# CURRENT SESSION
-# ==========================================================
-
-st.subheader(
-    "👤 Current Session"
-)
-
-st.write(
-    f"**Username:** "
-    f"{current_user.get('Username', '')}"
-)
-
-st.write(
-    f"**Role:** "
-    f"{current_role}"
-)
-
-st.write(
-    f"**Session Timeout:** "
-    f"{SESSION_TIMEOUT_MINUTES} minutes"
+st.caption(
+    "System Settings • Coordinator Monitoring & Task Management System"
 )
