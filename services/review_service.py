@@ -2,6 +2,7 @@ from uuid import uuid4
 from datetime import datetime
 
 from config.config import DAILY_REVIEW
+
 from utils.google_sheet import (
     read_all,
     insert_row,
@@ -11,12 +12,18 @@ from utils.google_sheet import (
 
 class ReviewService:
 
+    # ======================================================
+    # GET ALL REVIEWS
+    # ======================================================
+
     @staticmethod
     def get_all_reviews():
 
         try:
 
-            data = read_all(DAILY_REVIEW)
+            data = read_all(
+                DAILY_REVIEW
+            )
 
             return data if data else []
 
@@ -24,10 +31,30 @@ class ReviewService:
 
             return []
 
-    @staticmethod
-    def get_reviews_by_coordinator(coordinator_id):
 
-        data = ReviewService.get_all_reviews()
+    # ======================================================
+    # ALIAS
+    # ======================================================
+
+    @staticmethod
+    def get_all():
+
+        return ReviewService.get_all_reviews()
+
+
+    # ======================================================
+    # GET REVIEWS BY COORDINATOR
+    # ======================================================
+
+    @staticmethod
+    def get_reviews_by_coordinator(
+        coordinator_id
+    ):
+
+        data = (
+            ReviewService
+            .get_all_reviews()
+        )
 
         return [
 
@@ -35,14 +62,46 @@ class ReviewService:
 
             for row in data
 
-            if str(row.get("Coordinator_ID", "")) == str(coordinator_id)
+            if str(
+                row.get(
+                    "Coordinator_ID",
+                    ""
+                )
+            ).strip()
+
+            ==
+
+            str(
+                coordinator_id
+            ).strip()
+
+            and
+
+            str(
+                row.get(
+                    "Status",
+                    ""
+                )
+            ).strip().upper()
+
+            != "DELETED"
 
         ]
 
-    @staticmethod
-    def get_reviews_by_date(review_date):
 
-        data = ReviewService.get_all_reviews()
+    # ======================================================
+    # GET REVIEWS BY DATE
+    # ======================================================
+
+    @staticmethod
+    def get_reviews_by_date(
+        review_date
+    ):
+
+        data = (
+            ReviewService
+            .get_all_reviews()
+        )
 
         return [
 
@@ -50,9 +109,36 @@ class ReviewService:
 
             for row in data
 
-            if str(row.get("Date", "")) == str(review_date)
+            if str(
+                row.get(
+                    "Date",
+                    ""
+                )
+            ).strip()
+
+            ==
+
+            str(
+                review_date
+            ).strip()
+
+            and
+
+            str(
+                row.get(
+                    "Status",
+                    ""
+                )
+            ).strip().upper()
+
+            != "DELETED"
 
         ]
+
+
+    # ======================================================
+    # CREATE REVIEW
+    # ======================================================
 
     @staticmethod
     def create_review(
@@ -65,31 +151,63 @@ class ReviewService:
 
     ):
 
-        review_id = "REV-" + uuid4().hex[:6].upper()
+        review_id = (
+            "REV-"
+            + uuid4().hex[:8].upper()
+        )
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+        current_time = (
+            datetime.now()
+            .strftime(
+                "%d-%m-%Y %H:%M"
+            )
+        )
+
 
         row = [
 
             review_id,
+
             review_date,
+
             coordinator_id,
+
             task_id,
+
             status,
+
             remarks,
+
             current_time,
+
             current_time
 
         ]
 
-        insert_row(
 
-            DAILY_REVIEW,
-            row
+        try:
 
-        )
+            insert_row(
+                DAILY_REVIEW,
+                row
+            )
 
-        return True, "Daily Review Saved Successfully."
+            return (
+                True,
+                "Daily Review Saved Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to save Daily Review: {e}"
+            )
+
+
+    # ======================================================
+    # UPDATE REVIEW
+    # ======================================================
 
     @staticmethod
     def update_review(
@@ -100,109 +218,220 @@ class ReviewService:
 
     ):
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
-
-        update_value(
-
-            DAILY_REVIEW,
-            row_no,
-            5,
-            status
-
+        current_time = (
+            datetime.now()
+            .strftime(
+                "%d-%m-%Y %H:%M"
+            )
         )
 
-        update_value(
 
-            DAILY_REVIEW,
-            row_no,
-            6,
-            remarks
+        try:
 
-        )
+            update_value(
+                DAILY_REVIEW,
+                row_no,
+                5,
+                status
+            )
 
-        update_value(
 
-            DAILY_REVIEW,
-            row_no,
-            8,
-            current_time
+            update_value(
+                DAILY_REVIEW,
+                row_no,
+                6,
+                remarks
+            )
 
-        )
 
-        return True, "Review Updated Successfully."
+            update_value(
+                DAILY_REVIEW,
+                row_no,
+                8,
+                current_time
+            )
+
+
+            return (
+                True,
+                "Review Updated Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to update review: {e}"
+            )
+
+
+    # ======================================================
+    # DELETE REVIEW
+    # ======================================================
 
     @staticmethod
-    def delete_review(row_no):
+    def delete_review(
+        row_no
+    ):
 
-        update_value(
+        try:
 
-            DAILY_REVIEW,
-            row_no,
-            5,
-            "DELETED"
+            update_value(
+                DAILY_REVIEW,
+                row_no,
+                5,
+                "DELETED"
+            )
 
-        )
+            return (
+                True,
+                "Review Deleted Successfully."
+            )
 
-        return True, "Review Deleted Successfully."
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to delete review: {e}"
+            )
+
+
+    # ======================================================
+    # STATISTICS
+    # ======================================================
 
     @staticmethod
     def statistics():
 
-        data = ReviewService.get_all_reviews()
+        data = (
+            ReviewService
+            .get_all_reviews()
+        )
 
-        total = len(data)
+
+        active_data = [
+
+            row
+
+            for row in data
+
+            if str(
+                row.get(
+                    "Status",
+                    ""
+                )
+            ).strip().upper()
+
+            != "DELETED"
+
+        ]
+
+
+        total = len(
+            active_data
+        )
+
 
         completed = sum(
 
             1
 
-            for row in data
+            for row in active_data
 
-            if str(row.get("Status", "")).upper() == "COMPLETED"
+            if str(
+                row.get(
+                    "Status",
+                    ""
+                )
+            ).strip().upper()
+
+            == "COMPLETED"
 
         )
+
 
         pending = sum(
 
             1
 
-            for row in data
+            for row in active_data
 
-            if str(row.get("Status", "")).upper() == "PENDING"
+            if str(
+                row.get(
+                    "Status",
+                    ""
+                )
+            ).strip().upper()
+
+            == "PENDING"
 
         )
+
 
         in_progress = sum(
 
             1
 
-            for row in data
+            for row in active_data
 
-            if str(row.get("Status", "")).upper() == "IN PROGRESS"
+            if str(
+                row.get(
+                    "Status",
+                    ""
+                )
+            ).strip().upper()
+
+            in [
+                "IN PROGRESS",
+                "IN_PROGRESS"
+            ]
 
         )
 
+
         return {
 
-            "total": total,
-            "completed": completed,
-            "pending": pending,
-            "in_progress": in_progress
+            "total":
+                total,
+
+            "completed":
+                completed,
+
+            "pending":
+                pending,
+
+            "in_progress":
+                in_progress
 
         }
+
+
+    # ======================================================
+    # COMPLETION PERCENTAGE
+    # ======================================================
 
     @staticmethod
     def completion_percentage():
 
-        stats = ReviewService.statistics()
+        stats = (
+            ReviewService
+            .statistics()
+        )
+
 
         if stats["total"] == 0:
 
             return 0
 
+
         return round(
 
-            (stats["completed"] / stats["total"]) * 100,
+            (
+                stats["completed"]
+                /
+                stats["total"]
+            )
+            * 100,
 
             2
 
