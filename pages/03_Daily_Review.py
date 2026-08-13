@@ -2,13 +2,16 @@ import streamlit as st
 from datetime import date, datetime
 
 from core.navigation import require_login
+
 from services.task_assignment_service import TaskAssignmentService
 from services.task_service import TaskService
+
 from utils.google_sheet import (
     read_all,
     insert_row,
     update_value
 )
+
 from config.config import (
     DAILY_REVIEW,
     COORDINATOR_TASK_MAP
@@ -24,6 +27,7 @@ st.set_page_config(
     page_icon="📝",
     layout="wide"
 )
+
 
 require_login([
     "Developer",
@@ -77,6 +81,9 @@ st.divider()
 
 def get_value(record, *keys):
 
+    if not record:
+        return ""
+
     for key in keys:
 
         value = record.get(
@@ -84,10 +91,10 @@ def get_value(record, *keys):
             ""
         )
 
-        if value is not None and str(
-            value
-        ).strip():
-
+        if (
+            value is not None
+            and str(value).strip()
+        ):
             return value
 
     return ""
@@ -105,8 +112,8 @@ except Exception:
 
     all_tasks = []
 
-if all_tasks is None:
 
+if all_tasks is None:
     all_tasks = []
 
 
@@ -125,8 +132,8 @@ except Exception:
 
     all_assignments = []
 
-if all_assignments is None:
 
+if all_assignments is None:
     all_assignments = []
 
 
@@ -144,8 +151,8 @@ except Exception:
 
     all_reviews = []
 
-if all_reviews is None:
 
+if all_reviews is None:
     all_reviews = []
 
 
@@ -323,13 +330,13 @@ if current_role == "Coordinator":
         * 100
 
         if total_tasks > 0
-
         else 0
 
     )
 
 
     c1, c2, c3, c4 = st.columns(4)
+
 
     with c1:
 
@@ -338,6 +345,7 @@ if current_role == "Coordinator":
             total_tasks
         )
 
+
     with c2:
 
         st.metric(
@@ -345,12 +353,14 @@ if current_role == "Coordinator":
             completed_tasks
         )
 
+
     with c3:
 
         st.metric(
             "⏳ Pending",
             pending_tasks
         )
+
 
     with c4:
 
@@ -387,6 +397,7 @@ if current_role == "Coordinator":
     st.subheader(
         "📝 Submit Daily Review"
     )
+
 
     if not assigned_tasks:
 
@@ -452,8 +463,8 @@ if current_role == "Coordinator":
 
 
         selected_assignment = None
-
         selected_task = None
+
 
         for item in assigned_tasks:
 
@@ -480,24 +491,34 @@ if current_role == "Coordinator":
 
         col1, col2 = st.columns(2)
 
+
         with col1:
 
             review_date = st.date_input(
+
                 "Review Date",
+
                 value=date.today(),
+
                 key="review_date"
+
             )
+
 
         with col2:
 
             review_status = st.selectbox(
+
                 "Status",
+
                 [
                     "Completed",
                     "In Progress",
                     "Pending"
                 ],
+
                 key="review_status"
+
             )
 
 
@@ -545,6 +566,7 @@ if current_role == "Coordinator":
 
                 duplicate = False
 
+
                 for review in all_reviews:
 
                     review_username = str(
@@ -556,6 +578,7 @@ if current_role == "Coordinator":
                         )
                     ).strip()
 
+
                     review_task = str(
                         get_value(
                             review,
@@ -563,6 +586,7 @@ if current_role == "Coordinator":
                             "Task_Id"
                         )
                     ).strip()
+
 
                     review_date_value = str(
                         get_value(
@@ -572,7 +596,9 @@ if current_role == "Coordinator":
                         )
                     ).strip()
 
+
                     if (
+
                         review_username
                         == current_user_id
 
@@ -587,6 +613,7 @@ if current_role == "Coordinator":
                         == review_date.strftime(
                             "%d-%m-%Y"
                         )
+
                     ):
 
                         duplicate = True
@@ -597,34 +624,55 @@ if current_role == "Coordinator":
                 if duplicate:
 
                     st.error(
+
                         "Daily Review for this task "
                         "has already been submitted "
                         "for the selected date."
+
                     )
+
 
                 else:
 
                     try:
 
+                        # ----------------------------------
+                        # CREATE REVIEW ID
+                        # ----------------------------------
+
                         review_id = (
+
                             "REV-"
                             + datetime.now().strftime(
-                                "%Y%m%d%H%M%S"
-                            )
+                                "%Y%m%d%H%M%S%f"
+                            )[:20]
+
                         )
 
+
                         submitted_on = (
+
                             datetime.now().strftime(
                                 "%d-%m-%Y %H:%M"
                             )
+
                         )
 
+
                         assignment_id = get_value(
+
                             selected_assignment,
+
                             "Assignment_ID",
                             "Assignment_Id",
                             "ID"
+
                         )
+
+
+                        # ----------------------------------
+                        # DAILY REVIEW ROW
+                        # ----------------------------------
 
                         row = [
 
@@ -648,10 +696,15 @@ if current_role == "Coordinator":
 
                         ]
 
+
                         insert_row(
+
                             DAILY_REVIEW,
+
                             row
+
                         )
+
 
                         # ----------------------------------
                         # UPDATE ASSIGNMENT STATUS
@@ -659,23 +712,38 @@ if current_role == "Coordinator":
 
                         assignment_row = None
 
+
                         for index, assignment in enumerate(
+
                             all_assignments,
+
                             start=2
+
                         ):
 
+                            existing_assignment_id = str(
+
+                                get_value(
+
+                                    assignment,
+
+                                    "Assignment_ID",
+                                    "Assignment_Id",
+                                    "ID"
+
+                                )
+
+                            ).strip()
+
+
                             if (
+
+                                existing_assignment_id
+                                ==
                                 str(
-                                    get_value(
-                                        assignment,
-                                        "Assignment_ID",
-                                        "Assignment_Id",
-                                        "ID"
-                                    )
-                                ).strip()
-                                == str(
                                     assignment_id
                                 ).strip()
+
                             ):
 
                                 assignment_row = index
@@ -699,15 +767,20 @@ if current_role == "Coordinator":
 
 
                         st.success(
+
                             "✅ Daily Review submitted successfully."
+
                         )
 
                         st.rerun()
 
+
                     except Exception as e:
 
                         st.error(
+
                             f"Unable to submit Daily Review: {e}"
+
                         )
 
 
@@ -722,6 +795,7 @@ if current_role == "Coordinator":
         "📚 My Review History"
     )
 
+
     my_reviews = [
 
         review
@@ -729,17 +803,25 @@ if current_role == "Coordinator":
         for review in all_reviews
 
         if str(
+
             get_value(
+
                 review,
+
                 "Username",
                 "Coordinator_ID",
                 "Coordinator_Id"
+
             )
+
         ).strip()
+
         ==
+
         current_user_id
 
     ]
+
 
     if not my_reviews:
 
@@ -750,9 +832,13 @@ if current_role == "Coordinator":
     else:
 
         st.dataframe(
+
             my_reviews,
+
             use_container_width=True,
+
             hide_index=True
+
         )
 
 
@@ -766,6 +852,7 @@ else:
         "📊 Daily Review Monitoring"
     )
 
+
     # ------------------------------------------------------
     # METRICS
     # ------------------------------------------------------
@@ -774,6 +861,7 @@ else:
         all_reviews
     )
 
+
     completed_reviews = sum(
 
         1
@@ -781,14 +869,20 @@ else:
         for review in all_reviews
 
         if str(
+
             get_value(
                 review,
                 "Status"
             )
+
         ).strip().lower()
-        == "completed"
+
+        ==
+
+        "completed"
 
     )
+
 
     pending_reviews = sum(
 
@@ -797,14 +891,20 @@ else:
         for review in all_reviews
 
         if str(
+
             get_value(
                 review,
                 "Status"
             )
+
         ).strip().lower()
-        == "pending"
+
+        ==
+
+        "pending"
 
     )
+
 
     in_progress_reviews = sum(
 
@@ -813,20 +913,26 @@ else:
         for review in all_reviews
 
         if str(
+
             get_value(
                 review,
                 "Status"
             )
+
         ).strip().lower()
+
         in [
+
             "in progress",
             "in_progress"
+
         ]
 
     )
 
 
     c1, c2, c3, c4 = st.columns(4)
+
 
     with c1:
 
@@ -835,6 +941,7 @@ else:
             total_reviews
         )
 
+
     with c2:
 
         st.metric(
@@ -842,12 +949,14 @@ else:
             completed_reviews
         )
 
+
     with c3:
 
         st.metric(
             "⏳ Pending",
             pending_reviews
         )
+
 
     with c4:
 
@@ -873,7 +982,11 @@ else:
     else:
 
         st.dataframe(
+
             all_reviews,
+
             use_container_width=True,
+
             hide_index=True
+
         )
