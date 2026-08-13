@@ -1,38 +1,86 @@
 import streamlit as st
 
 
+# ==========================================================
+# DEFAULT SESSION
+# ==========================================================
+
 DEFAULT_SESSION = {
     "logged_in": False,
     "username": "",
     "role": "",
     "full_name": "",
-    "user_id": ""
+    "user_id": "",
+    "user": {}
 }
 
 
-def initialize_session():
-    """
-    Initialize session variables only once.
-    """
-    for key, value in DEFAULT_SESSION.items():
-        st.session_state.setdefault(key, value)
+# ==========================================================
+# INITIALIZE SESSION
+# ==========================================================
 
+def initialize_session():
+
+    for key, value in DEFAULT_SESSION.items():
+
+        st.session_state.setdefault(
+            key,
+            value
+        )
+
+
+# ==========================================================
+# LOGIN
+# ==========================================================
 
 def login(user: dict):
-    """
-    Save authenticated user information in session.
-    """
-    st.session_state["logged_in"] = True
-    st.session_state["username"] = user.get("Username", "")
-    st.session_state["role"] = user.get("Role", "")
-    st.session_state["full_name"] = user.get("Full_Name", "")
-    st.session_state["user_id"] = user.get("User_ID", "")
 
+    # ------------------------------------------------------
+    # Store complete user object
+    # ------------------------------------------------------
+
+    st.session_state["user"] = dict(user)
+
+    # ------------------------------------------------------
+    # Store individual session values
+    # ------------------------------------------------------
+
+    st.session_state["logged_in"] = True
+
+    st.session_state["username"] = str(
+        user.get(
+            "Username",
+            ""
+        )
+    ).strip()
+
+    st.session_state["role"] = str(
+        user.get(
+            "Role",
+            ""
+        )
+    ).strip()
+
+    st.session_state["full_name"] = str(
+        user.get(
+            "Full_Name",
+            ""
+        )
+    ).strip()
+
+    st.session_state["user_id"] = str(
+        user.get(
+            "User_ID",
+            ""
+        )
+    ).strip()
+
+
+# ==========================================================
+# LOGOUT
+# ==========================================================
 
 def logout():
-    """
-    Clear current session and reload app.
-    """
 
     st.session_state.clear()
 
