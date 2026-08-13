@@ -1,24 +1,26 @@
 import streamlit as st
+import pandas as pd
+import hashlib
+from datetime import datetime
 
-from config.config import (
-    ROLE_DEVELOPER,
-    ROLE_ADMIN,
-    ROLE_COORDINATOR,
-    USER_MASTER
-)
+from core.navigation import require_login
 
 from utils.google_sheet import (
     read_all,
+    insert_row,
     update_value
 )
 
-from utils.security import (
-    hash_password
+from config.config import (
+    USERS,
+    ROLE_DEVELOPER,
+    ROLE_ADMIN,
+    ROLE_COORDINATOR
 )
 
 
 # ==========================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ==========================================================
 
 st.set_page_config(
@@ -29,67 +31,92 @@ st.set_page_config(
 
 
 # ==========================================================
-# LOGIN CHECK
+# ACCESS
 # ==========================================================
 
-if (
-    "logged_in" not in st.session_state
-    or not st.session_state.logged_in
-):
-
-    st.error(
-        "Please login first."
-    )
-
-    st.stop()
+require_login([
+    ROLE_DEVELOPER,
+    ROLE_ADMIN
+])
 
 
 # ==========================================================
-# CURRENT USER
+# SESSION
 # ==========================================================
-
-current_user = st.session_state.get(
-    "user",
-    {}
-)
 
 current_role = str(
-    current_user.get(
-        "Role",
-        ""
-    )
+    st.session_state.get("role", "")
+).strip()
+
+current_user_id = str(
+    st.session_state.get("user_id", "")
+).strip()
+
+current_username = str(
+    st.session_state.get("username", "")
 ).strip()
 
 
 # ==========================================================
-# ACCESS CONTROL
+# HELPERS
 # ==========================================================
 
-if current_role not in [
-    ROLE_DEVELOPER,
-    ROLE_ADMIN
-]:
+def clean(value):
+    if value is None:
+        return ""
+    return str(value).strip()
 
-    st.error(
-        "You do not have permission to access User Management."
+
+def hash_password(password):
+    return hashlib.sha256(
+        password.encode("utf-8")
+    ).hexdigest()
+
+
+def get_value(row, *keys):
+
+    for key in keys:
+
+        value = row.get(
+            key,
+            ""
+        )
+
+        if value is not None and clean(value):
+
+            return clean(value)
+
+    return ""
+
+
+def can_manage_user(target_role):
+
+    target_role = clean(
+        target_role
+    ).lower()
+
+    current = clean(
+        current_role
+    ).lower()
+
+    if current == "developer":
+        return target_role in [
+            "developer",
+            "admin",
+            "coordinator"
+        ]
+
+    if current == "admin":
+        return target_role == "coordinator"
+
+    return False
+
+
+def can_disable_user(target_role):
+
+    return can_manage_user(
+        target_role
     )
-
-    st.stop()
-
-
-# ==========================================================
-# HEADER
-# ==========================================================
-
-st.title(
-    "👥 User Management"
-)
-
-st.caption(
-    "Manage user accounts and passwords"
-)
-
-st.divider()
 
 
 # ==========================================================
@@ -99,258 +126,431 @@ st.divider()
 try:
 
     users = read_all(
-        USER_MASTER
+        USERS
     )
 
-except Exception as e:
+except Exception:
 
-    st.error(
-        f"Unable to load users: {e}"
-    )
-
-    st.stop()
+    users = []
 
 
-if not users:
-
-    st.info(
-        "No users found."
-    )
-
-    st.stop()
+users = users or []
 
 
 # ==========================================================
-# CURRENT USERNAME
+# HEADER
 # ==========================================================
 
-current_username = str(
-    current_user.get(
-        "Username",
-        ""
+st.title("👥 User Management")
+
+st.caption(
+    f"User: {current_username} | Role: {current_role}"
+)
+
+st.divider()
+
+
+# ==========================================================
+# METRICS
+# ==========================================================
+
+active_users = [
+    user
+    for user in users
+    if clean(
+        get_value(
+            user,
+            "Status"
+        )
+    ).upper()
+    == "ACTIVE"
+]
+
+
+developers = [
+    user
+    for user in users
+    if clean(
+        get_value(
+            user,
+            "Role"
+        )
+    ).lower()
+    == "developer"
+]
+
+
+admins = [
+    user
+    for user in users
+    if clean(
+        get_value(
+            user,
+            "Role"
+        )
+    ).lower()
+    == "admin"
+]
+
+
+coordinators = [
+    user
+    for user in users
+    if clean(
+        get_value(
+            user,
+            "Role"
+        )
+    ).lower()
+    == "coordinator"
+]
+
+
+c1, c2, c3, c4 = st.columns(4)
+
+with c1:
+    st.metric(
+        "👥 Total Users",
+        len(users)
     )
-).strip().lower()
+
+with c2:
+    st.metric(
+        "👨‍💻 Developers",
+        len(developers)
+    )
+
+with c3:
+    st.metric(
+        "🧑‍💼 Admins",
+        len(admins)
+    )
+
+with c4:
+    st.metric(
+        "👨‍⚕️ Coordinators",
+        len(coordinators)
+    )
+
+
+st.divider()
 
 
 # ==========================================================
-# PASSWORD CHANGE
+# TABS
 # ==========================================================
 
-st.subheader(
-    "🔐 Change User Password"
+tab_users, tab_create, tab_actions = st.tabs(
+    [
+        "👥 User List",
+        "➕ Create User",
+        "⚙️ User Actions"
+    ]
 )
 
 
-# ----------------------------------------------------------
-# FILTER USERS ACCORDING TO ROLE
-# ----------------------------------------------------------
+# ==========================================================
+# USER LIST
+# ==========================================================
 
-allowed_users = []
+with tab_users:
+
+    st.subheader(
+        "👥 All Users"
+    )
+
+    search = st.text_input(
+        "🔎 Search User",
+        key="user_search"
+    )
+
+    role_filter = st.selectbox(
+        "Role",
+        [
+            "All",
+            "Developer",
+            "Admin",
+            "Coordinator"
+        ],
+        key="role_filter"
+    )
+
+    status_filter = st.selectbox(
+        "Status",
+        [
+            "All",
+            "ACTIVE",
+            "DISABLED"
+        ],
+        key="status_filter"
+    )
 
 
-for row_number, user in enumerate(
-    users,
-    start=2
-):
+    filtered_users = []
 
-    username = str(
-        user.get(
-            "Username",
-            ""
+    for user in users:
+
+        username = get_value(
+            user,
+            "Username"
         )
-    ).strip()
 
-    role = str(
-        user.get(
-            "Role",
-            ""
+        full_name = get_value(
+            user,
+            "Full_Name",
+            "Full Name"
         )
-    ).strip()
 
-    status = str(
-        user.get(
-            "Status",
-            "ACTIVE"
+        role = get_value(
+            user,
+            "Role"
         )
-    ).strip().upper()
+
+        status = get_value(
+            user,
+            "Status"
+        )
 
 
-    if not username:
+        if search:
 
-        continue
+            search_text = (
+                username
+                + " "
+                + full_name
+                + " "
+                + role
+            ).lower()
 
+            if search.lower() not in search_text:
 
-    # ------------------------------------------------------
-    # DEVELOPER
-    # Developer can manage Admin + Coordinator
-    # ------------------------------------------------------
-
-    if current_role == ROLE_DEVELOPER:
-
-        if role in [
-            ROLE_ADMIN,
-            ROLE_COORDINATOR
-        ]:
-
-            allowed_users.append(
-                (
-                    row_number,
-                    user
-                )
-            )
+                continue
 
 
-    # ------------------------------------------------------
-    # ADMIN
-    # Admin can manage Coordinator only
-    # ------------------------------------------------------
+        if role_filter != "All":
 
-    elif current_role == ROLE_ADMIN:
+            if role.lower() != role_filter.lower():
 
-        if role == ROLE_COORDINATOR:
+                continue
 
-            allowed_users.append(
-                (
-                    row_number,
-                    user
-                )
-            )
+
+        if status_filter != "All":
+
+            if status.upper() != status_filter.upper():
+
+                continue
+
+
+        filtered_users.append(
+            user
+        )
+
+
+    rows = []
+
+    for user in filtered_users:
+
+        rows.append(
+            {
+                "User_ID":
+                    get_value(
+                        user,
+                        "User_ID",
+                        "User_Id"
+                    ),
+
+                "Username":
+                    get_value(
+                        user,
+                        "Username"
+                    ),
+
+                "Role":
+                    get_value(
+                        user,
+                        "Role"
+                    ),
+
+                "Full_Name":
+                    get_value(
+                        user,
+                        "Full_Name",
+                        "Full Name"
+                    ),
+
+                "Designation":
+                    get_value(
+                        user,
+                        "Designation"
+                    ),
+
+                "Mobile":
+                    get_value(
+                        user,
+                        "Mobile"
+                    ),
+
+                "Email":
+                    get_value(
+                        user,
+                        "Email"
+                    ),
+
+                "Status":
+                    get_value(
+                        user,
+                        "Status"
+                    ),
+
+                "Last_Login":
+                    get_value(
+                        user,
+                        "Last_Login",
+                        "Last Login"
+                    ),
+
+                "Password_Changed":
+                    get_value(
+                        user,
+                        "Password_Changed"
+                    ),
+
+                "Login_Attempts":
+                    get_value(
+                        user,
+                        "Login_Attempts"
+                    ),
+
+                "Account_Locked":
+                    get_value(
+                        user,
+                        "Account_Locked"
+                    )
+            }
+        )
+
+
+    if rows:
+
+        st.dataframe(
+            pd.DataFrame(rows),
+            use_container_width=True,
+            hide_index=True
+        )
+
+        st.info(
+            f"Showing {len(rows)} of {len(users)} users"
+        )
+
+    else:
+
+        st.info(
+            "No users found."
+        )
 
 
 # ==========================================================
-# USER SELECTION
+# CREATE USER
 # ==========================================================
 
-if not allowed_users:
+with tab_create:
 
-    st.info(
-        "No users are available for password management."
-    )
-
-else:
-
-    user_options = {}
-
-
-    for row_number, user in allowed_users:
-
-        username = str(
-            user.get(
-                "Username",
-                ""
-            )
-        ).strip()
-
-        role = str(
-            user.get(
-                "Role",
-                ""
-            )
-        ).strip()
-
-        user_options[
-            f"{username} ({role})"
-        ] = row_number
-
-
-    selected_label = st.selectbox(
-
-        "Select User",
-
-        list(
-            user_options.keys()
-        ),
-
-        key="password_user_select"
-
+    st.subheader(
+        "➕ Create New User"
     )
 
 
-    selected_row = user_options[
-        selected_label
+    new_role_options = [
+        "Coordinator"
     ]
 
+    if current_role.lower() == "developer":
 
-    selected_user = users[
-        selected_row - 2
-    ]
+        new_role_options = [
+            "Admin",
+            "Coordinator"
+        ]
 
 
-    selected_username = str(
-        selected_user.get(
+    new_role = st.selectbox(
+        "Role",
+        new_role_options,
+        key="new_user_role"
+    )
+
+
+    col1, col2 = st.columns(2)
+
+    with col1:
+
+        new_username = st.text_input(
             "Username",
-            ""
+            key="new_username"
         )
-    ).strip()
 
-
-    selected_role = str(
-        selected_user.get(
-            "Role",
-            ""
+        new_full_name = st.text_input(
+            "Full Name",
+            key="new_full_name"
         )
-    ).strip()
+
+        new_designation = st.text_input(
+            "Designation",
+            key="new_designation"
+        )
 
 
-    st.info(
-        f"Selected User: "
-        f"**{selected_username}** "
-        f"| Role: **{selected_role}**"
-    )
+    with col2:
 
+        new_mobile = st.text_input(
+            "Mobile",
+            key="new_mobile"
+        )
 
-    # ======================================================
-    # NEW PASSWORD
-    # ======================================================
+        new_email = st.text_input(
+            "Email",
+            key="new_email"
+        )
 
-    new_password = st.text_input(
-
-        "New Password",
-
-        type="password",
-
-        key="new_user_password"
-
-    )
+        new_password = st.text_input(
+            "Password",
+            type="password",
+            key="new_password"
+        )
 
 
     confirm_password = st.text_input(
-
-        "Confirm New Password",
-
+        "Confirm Password",
         type="password",
-
-        key="confirm_user_password"
-
+        key="confirm_new_password"
     )
 
 
-    # ======================================================
-    # CHANGE PASSWORD
-    # ======================================================
-
-    if st.button(
-
-        "🔑 Update Password",
-
+    create_button = st.button(
+        "➕ Create User",
         type="primary",
-
         use_container_width=True,
+        key="create_user_button"
+    )
 
-        key="update_user_password"
 
-    ):
+    if create_button:
 
-        if not new_password:
+        if not new_username.strip():
 
             st.error(
-                "Please enter a new password."
+                "Username is required."
             )
 
-        elif len(new_password) < 8:
+        elif not new_full_name.strip():
 
             st.error(
-                "Password must contain at least 8 characters."
+                "Full Name is required."
+            )
+
+        elif not new_password:
+
+            st.error(
+                "Password is required."
             )
 
         elif new_password != confirm_password:
@@ -361,180 +561,487 @@ else:
 
         else:
 
-            try:
+            username_exists = any(
+                clean(
+                    get_value(
+                        user,
+                        "Username"
+                    )
+                ).lower()
+                == new_username.strip().lower()
 
-                password_hash = hash_password(
-                    new_password
-                )
-
-
-                # --------------------------------------------------
-                # Password_Hash column
-                # --------------------------------------------------
-
-                password_column = 5
-
-
-                update_value(
-
-                    USER_MASTER,
-
-                    selected_row,
-
-                    password_column,
-
-                    password_hash
-
-                )
+                for user in users
+            )
 
 
-                # --------------------------------------------------
-                # Reset Login Attempts
-                # --------------------------------------------------
-
-                update_value(
-
-                    USER_MASTER,
-
-                    selected_row,
-
-                    12,
-
-                    0
-
-                )
-
-
-                # --------------------------------------------------
-                # Unlock Account
-                # --------------------------------------------------
-
-                update_value(
-
-                    USER_MASTER,
-
-                    selected_row,
-
-                    13,
-
-                    "NO"
-
-                )
-
-
-                st.success(
-
-                    f"Password updated successfully "
-                    f"for {selected_username}."
-
-                )
-
-                st.rerun()
-
-
-            except Exception as e:
+            if username_exists:
 
                 st.error(
+                    "Username already exists."
+                )
 
-                    f"Unable to update password: {e}"
+            else:
 
+                existing_ids = []
+
+                for user in users:
+
+                    uid = get_value(
+                        user,
+                        "User_ID",
+                        "User_Id"
+                    )
+
+                    if uid:
+                        existing_ids.append(uid)
+
+
+                if new_role.lower() == "admin":
+
+                    prefix = "USRADM"
+
+                else:
+
+                    prefix = "USRCO"
+
+
+                numeric_part = (
+                    len(existing_ids)
+                    + 1
+                )
+
+                new_user_id = (
+                    f"{prefix}{numeric_part:03d}"
                 )
 
 
+                row = [
+
+                    new_user_id,
+
+                    new_username.strip(),
+
+                    hash_password(
+                        new_password
+                    ),
+
+                    new_role,
+
+                    new_full_name.strip(),
+
+                    new_designation.strip(),
+
+                    new_mobile.strip(),
+
+                    new_email.strip(),
+
+                    "ACTIVE",
+
+                    "",
+
+                    "YES",
+
+                    "NO",
+
+                    0,
+
+                    "NO",
+
+                    datetime.now().strftime(
+                        "%d-%m-%Y"
+                    ),
+
+                    current_username,
+
+                    "",
+
+                    "",
+
+                    ""
+
+                ]
+
+
+                try:
+
+                    insert_row(
+                        USERS,
+                        row
+                    )
+
+                    st.success(
+                        "User created successfully."
+                    )
+
+                    st.rerun()
+
+                except Exception as e:
+
+                    st.error(
+                        f"Unable to create user: {e}"
+                    )
+
+
 # ==========================================================
-# USER STATUS MONITOR
+# USER ACTIONS
 # ==========================================================
 
-st.divider()
+with tab_actions:
 
-st.subheader(
-    "👥 User Account Status"
-)
-
-
-status_rows = []
+    st.subheader(
+        "⚙️ User Actions"
+    )
 
 
-for row_number, user in enumerate(
-    users,
-    start=2
-):
+    manageable_users = []
 
-    username = str(
-        user.get(
-            "Username",
-            ""
+    for user in users:
+
+        target_role = get_value(
+            user,
+            "Role"
         )
-    ).strip()
 
-    role = str(
-        user.get(
-            "Role",
-            ""
+        target_user_id = get_value(
+            user,
+            "User_ID",
+            "User_Id"
         )
-    ).strip()
 
-    status = str(
-        user.get(
-            "Status",
-            ""
+        if not target_user_id:
+
+            continue
+
+
+        if not can_manage_user(
+            target_role
+        ):
+
+            continue
+
+
+        if (
+            target_user_id
+            == current_user_id
+        ):
+
+            continue
+
+
+        manageable_users.append(
+            user
         )
-    ).strip()
 
-    locked = str(
-        user.get(
-            "Account_Locked",
-            "NO"
+
+    if not manageable_users:
+
+        st.info(
+            "No users are available for management."
         )
-    ).strip()
-
-
-    # ------------------------------------------------------
-    # Visibility rules
-    # ------------------------------------------------------
-
-    if current_role == ROLE_DEVELOPER:
-
-        visible = role in [
-            ROLE_ADMIN,
-            ROLE_COORDINATOR
-        ]
 
     else:
 
-        visible = role == ROLE_COORDINATOR
+        user_options = {}
+
+        for user in manageable_users:
+
+            uid = get_value(
+                user,
+                "User_ID",
+                "User_Id"
+            )
+
+            username = get_value(
+                user,
+                "Username"
+            )
+
+            role = get_value(
+                user,
+                "Role"
+            )
+
+            full_name = get_value(
+                user,
+                "Full_Name",
+                "Full Name"
+            )
+
+            user_options[
+                uid
+            ] = (
+                f"{full_name or username} "
+                f"| {username} "
+                f"| {role}"
+            )
 
 
-    if not visible:
-
-        continue
-
-
-    status_rows.append(
-        {
-            "Username": username,
-            "Role": role,
-            "Status": status,
-            "Account Locked": locked
-        }
-    )
+        selected_user_id = st.selectbox(
+            "Select User",
+            list(
+                user_options.keys()
+            ),
+            format_func=lambda x:
+                user_options[x],
+            key="selected_manage_user"
+        )
 
 
-if status_rows:
+        selected_user = next(
+            (
+                user
 
-    st.dataframe(
+                for user in manageable_users
 
-        status_rows,
+                if get_value(
+                    user,
+                    "User_ID",
+                    "User_Id"
+                )
+                == selected_user_id
+            ),
+            {}
+        )
 
-        use_container_width=True,
 
-        hide_index=True
+        selected_role = get_value(
+            selected_user,
+            "Role"
+        )
 
-    )
+        selected_username = get_value(
+            selected_user,
+            "Username"
+        )
 
-else:
+        selected_status = get_value(
+            selected_user,
+            "Status"
+        )
 
-    st.info(
-        "No user accounts available."
-    )
 
+        st.write(
+            f"**Username:** {selected_username}"
+        )
+
+        st.write(
+            f"**Role:** {selected_role}"
+        )
+
+        st.write(
+            f"**Current Status:** {selected_status}"
+        )
+
+
+        st.divider()
+
+
+        # ==================================================
+        # PASSWORD RESET
+        # ==================================================
+
+        st.markdown(
+            "### 🔐 Change Password"
+        )
+
+
+        new_password_admin = st.text_input(
+            "New Password",
+            type="password",
+            key="admin_new_password"
+        )
+
+
+        confirm_password_admin = st.text_input(
+            "Confirm New Password",
+            type="password",
+            key="admin_confirm_password"
+        )
+
+
+        if st.button(
+            "🔐 Change Password",
+            type="primary",
+            use_container_width=True,
+            key="change_user_password"
+        ):
+
+            if not new_password_admin:
+
+                st.error(
+                    "New password is required."
+                )
+
+            elif (
+                new_password_admin
+                != confirm_password_admin
+            ):
+
+                st.error(
+                    "Passwords do not match."
+                )
+
+            else:
+
+                password_hash = hash_password(
+                    new_password_admin
+                )
+
+
+                password_column = 2
+
+                modified_on_column = 16
+
+                modified_by_column = 17
+
+
+                try:
+
+                    update_value(
+                        USERS,
+                        selected_user.get(
+                            "_row",
+                            selected_user.get(
+                                "row",
+                                0
+                            )
+                        ),
+                        password_column,
+                        password_hash
+                    )
+
+
+                    update_value(
+                        USERS,
+                        selected_user.get(
+                            "_row",
+                            selected_user.get(
+                                "row",
+                                0
+                            )
+                        ),
+                        modified_on_column,
+                        datetime.now().strftime(
+                            "%d-%m-%Y %H:%M"
+                        )
+                    )
+
+
+                    update_value(
+                        USERS,
+                        selected_user.get(
+                            "_row",
+                            selected_user.get(
+                                "row",
+                                0
+                            )
+                        ),
+                        modified_by_column,
+                        current_username
+                    )
+
+
+                    st.success(
+                        "Password changed successfully."
+                    )
+
+                except Exception as e:
+
+                    st.error(
+                        f"Unable to change password: {e}"
+                    )
+
+
+        st.divider()
+
+
+        # ==================================================
+        # ENABLE / DISABLE
+        # ==================================================
+
+        if can_disable_user(
+            selected_role
+        ):
+
+            st.markdown(
+                "### 🔄 Account Status"
+            )
+
+
+            if selected_status.upper() == "ACTIVE":
+
+                if st.button(
+                    "🚫 Disable User",
+                    use_container_width=True,
+                    key="disable_selected_user"
+                ):
+
+                    try:
+
+                        row_number = selected_user.get(
+                            "_row",
+                            selected_user.get(
+                                "row",
+                                0
+                            )
+                        )
+
+
+                        update_value(
+                            USERS,
+                            row_number,
+                            9,
+                            "DISABLED"
+                        )
+
+
+                        st.success(
+                            "User disabled successfully."
+                        )
+
+                        st.rerun()
+
+                    except Exception as e:
+
+                        st.error(
+                            f"Unable to disable user: {e}"
+                        )
+
+            else:
+
+                if st.button(
+                    "✅ Enable User",
+                    use_container_width=True,
+                    key="enable_selected_user"
+                ):
+
+                    try:
+
+                        row_number = selected_user.get(
+                            "_row",
+                            selected_user.get(
+                                "row",
+                                0
+                            )
+                        )
+
+
+                        update_value(
+                            USERS,
+                            row_number,
+                            9,
+                            "ACTIVE"
+                        )
+
+
+                        st.success(
+                            "User enabled successfully."
+                        )
+
+                        st.rerun()
+
+                    except Exception as e:
+
+                        st.error(
+                            f"Unable to enable user: {e}"
+                        )
