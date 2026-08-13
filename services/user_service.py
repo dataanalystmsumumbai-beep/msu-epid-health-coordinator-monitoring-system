@@ -1,7 +1,13 @@
 from datetime import datetime
 import hashlib
 
-from config.config import USER_MASTER
+from config.config import (
+    USER_MASTER,
+    ROLE_DEVELOPER,
+    ROLE_ADMIN,
+    ROLE_COORDINATOR
+)
+
 from utils.google_sheet import (
     read_all,
     insert_row,
@@ -11,57 +17,212 @@ from utils.google_sheet import (
 
 class UserService:
 
+    # ======================================================
+    # HELPERS
+    # ======================================================
+
+    @staticmethod
+    def _now():
+
+        return datetime.now().strftime(
+            "%d-%m-%Y %H:%M"
+        )
+
+
+    @staticmethod
+    def _hash_password(password):
+
+        return hashlib.sha256(
+            str(password)
+            .encode("utf-8")
+        ).hexdigest()
+
+
+    @staticmethod
+    def _role(value):
+
+        return str(
+            value or ""
+        ).strip().lower()
+
+
+    @staticmethod
+    def _row_number(user):
+
+        for key in [
+            "_row",
+            "Row",
+            "row",
+            "Row_Number",
+            "row_number"
+        ]:
+
+            if key in user:
+
+                try:
+                    return int(
+                        user[key]
+                    )
+                except Exception:
+                    pass
+
+        return None
+
+
+    # ======================================================
+    # GET ALL USERS
+    # ======================================================
+
     @staticmethod
     def get_all_users():
-        """
-        Returns all users from User Master sheet.
-        """
-        return read_all(USER_MASTER)
+
+        try:
+
+            return (
+                read_all(
+                    USER_MASTER
+                )
+                or []
+            )
+
+        except Exception:
+
+            return []
+
+
+    # ======================================================
+    # GET USER
+    # ======================================================
 
     @staticmethod
     def get_user(username):
-        """
-        Get user by username.
-        """
 
         if not username:
             return None
 
-        users = read_all(USER_MASTER)
+        username = str(
+            username
+        ).strip().lower()
 
-        for user in users:
 
-            if (
-                str(user.get("Username", "")).strip().lower()
-                ==
-                username.strip().lower()
-            ):
+        for user in UserService.get_all_users():
+
+            db_username = str(
+                user.get(
+                    "Username",
+                    ""
+                )
+            ).strip().lower()
+
+
+            if db_username == username:
+
                 return user
 
+
         return None
+
+
+    # ======================================================
+    # GET USER BY ID
+    # ======================================================
+
+    @staticmethod
+    def get_user_by_id(user_id):
+
+        if not user_id:
+            return None
+
+        user_id = str(
+            user_id
+        ).strip()
+
+
+        for user in UserService.get_all_users():
+
+            db_id = str(
+                user.get(
+                    "User_ID",
+                    ""
+                )
+            ).strip()
+
+
+            if db_id == user_id:
+
+                return user
+
+
+        return None
+
+
+    # ======================================================
+    # USERNAME EXISTS
+    # ======================================================
 
     @staticmethod
     def username_exists(username):
 
-        return UserService.get_user(username) is not None
+        return (
+            UserService
+            .get_user(username)
+            is not None
+        )
+
+
+    # ======================================================
+    # GENERATE USER ID
+    # ======================================================
 
     @staticmethod
     def generate_user_id():
 
-        users = read_all(USER_MASTER)
+        users = (
+            UserService
+            .get_all_users()
+        )
 
         max_id = 0
 
+
         for user in users:
 
-            uid = str(user.get("User_ID", "")).replace("USR", "")
+            uid = str(
+                user.get(
+                    "User_ID",
+                    ""
+                )
+            ).strip().upper()
 
-            try:
-                max_id = max(max_id, int(uid))
-            except:
-                pass
 
-        return f"USR{max_id + 1:03d}"
+            if uid.startswith("USR"):
+
+                try:
+
+                    number = int(
+                        uid.replace(
+                            "USR",
+                            ""
+                        )
+                    )
+
+                    max_id = max(
+                        max_id,
+                        number
+                    )
+
+                except Exception:
+                    pass
+
+
+        return (
+            f"USR{max_id + 1:03d}"
+        )
+
+
+    # ======================================================
+    # CREATE USER
+    # ======================================================
 
     @staticmethod
     def create_user(
@@ -69,67 +230,165 @@ class UserService:
         password,
         role,
         full_name,
-        designation,
-        mobile,
-        email,
+        designation="",
+        mobile="",
+        email="",
         created_by="SYSTEM"
     ):
 
-        username = username.strip()
-        password = password.strip()
-        role = role.strip()
-        full_name = full_name.strip()
-        designation = designation.strip()
-        mobile = mobile.strip()
-        email = email.strip()
+        username = str(
+            username or ""
+        ).strip()
 
-        if username == "":
-            return False, "Username is required."
+        password = str(
+            password or ""
+        ).strip()
 
-        if password == "":
-            return False, "Password is required."
+        role = str(
+            role or ""
+        ).strip()
 
-        if full_name == "":
-            return False, "Full Name is required."
+        full_name = str(
+            full_name or ""
+        ).strip()
 
-        if UserService.username_exists(username):
-            return False, "Username already exists."
+        designation = str(
+            designation or ""
+        ).strip()
 
-        password_hash = hashlib.sha256(
-            password.encode("utf-8")
-        ).hexdigest()
+        mobile = str(
+            mobile or ""
+        ).strip()
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+        email = str(
+            email or ""
+        ).strip()
+
+
+        if not username:
+
+            return (
+                False,
+                "Username is required."
+            )
+
+
+        if not password:
+
+            return (
+                False,
+                "Password is required."
+            )
+
+
+        if not full_name:
+
+            return (
+                False,
+                "Full Name is required."
+            )
+
+
+        if role not in [
+            ROLE_DEVELOPER,
+            ROLE_ADMIN,
+            ROLE_COORDINATOR
+        ]:
+
+            return (
+                False,
+                "Invalid user role."
+            )
+
+
+        if UserService.username_exists(
+            username
+        ):
+
+            return (
+                False,
+                "Username already exists."
+            )
+
+
+        password_hash = (
+            UserService
+            ._hash_password(
+                password
+            )
+        )
+
+
+        current_time = (
+            UserService
+            ._now()
+        )
+
 
         row = [
 
-            UserService.generate_user_id(),     # User_ID
-            username,                           # Username
-            password_hash,                      # Password_Hash
-            role,                               # Role
-            full_name,                          # Full_Name
-            designation,                        # Designation
-            mobile,                             # Mobile
-            email,                              # Email
-            "ACTIVE",                           # Status
-            "",                                 # Last_Login
-            current_time,                       # Password_Changed
-            0,                                  # Login_Attempts
-            "NO",                               # Account_Locked
-            current_time,                       # Created_On
-            created_by,                         # Created_By
-            "",                                 # Modified_On
-            "",                                 # Modified_By
-            ""                                  # Remarks
+            UserService.generate_user_id(),
+
+            username,
+
+            password_hash,
+
+            role,
+
+            full_name,
+
+            designation,
+
+            mobile,
+
+            email,
+
+            "ACTIVE",
+
+            "",
+
+            current_time,
+
+            0,
+
+            "NO",
+
+            current_time,
+
+            created_by,
+
+            "",
+
+            "",
+
+            ""
 
         ]
 
-        insert_row(
-            USER_MASTER,
-            row
-        )
 
-        return True, "User Created Successfully."
+        try:
+
+            insert_row(
+                USER_MASTER,
+                row
+            )
+
+            return (
+                True,
+                "User Created Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to create user: {e}"
+            )
+
+
+    # ======================================================
+    # UPDATE USER DETAILS
+    # ======================================================
 
     @staticmethod
     def update_user(
@@ -142,32 +401,225 @@ class UserService:
         modified_by="SYSTEM"
     ):
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+        if not row_no:
 
-        update_value(USER_MASTER, row_no, 4, role)
-        update_value(USER_MASTER, row_no, 5, full_name)
-        update_value(USER_MASTER, row_no, 6, designation)
-        update_value(USER_MASTER, row_no, 7, mobile)
-        update_value(USER_MASTER, row_no, 8, email)
-        update_value(USER_MASTER, row_no, 16, current_time)
-        update_value(USER_MASTER, row_no, 17, modified_by)
+            return (
+                False,
+                "Invalid user row."
+            )
 
-        return True, "User Updated Successfully."
+
+        role = str(
+            role or ""
+        ).strip()
+
+
+        if role not in [
+            ROLE_DEVELOPER,
+            ROLE_ADMIN,
+            ROLE_COORDINATOR
+        ]:
+
+            return (
+                False,
+                "Invalid user role."
+            )
+
+
+        current_time = (
+            UserService
+            ._now()
+        )
+
+
+        try:
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                4,
+                role
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                5,
+                str(
+                    full_name or ""
+                ).strip()
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                6,
+                str(
+                    designation or ""
+                ).strip()
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                7,
+                str(
+                    mobile or ""
+                ).strip()
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                8,
+                str(
+                    email or ""
+                ).strip()
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                16,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                17,
+                modified_by
+            )
+
+
+            return (
+                True,
+                "User Updated Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to update user: {e}"
+            )
+
+
+    # ======================================================
+    # CHANGE PASSWORD
+    # ======================================================
 
     @staticmethod
-    def lock_user(row_no):
+    def change_password(
+        row_no,
+        new_password,
+        modified_by="SYSTEM"
+    ):
 
-        update_value(USER_MASTER, row_no, 13, "YES")
+        new_password = str(
+            new_password or ""
+        ).strip()
 
-        return True, "User Locked Successfully."
 
-    @staticmethod
-    def unlock_user(row_no):
+        if not row_no:
 
-        update_value(USER_MASTER, row_no, 13, "NO")
-        update_value(USER_MASTER, row_no, 12, 0)
+            return (
+                False,
+                "Invalid user row."
+            )
 
-        return True, "User Unlocked Successfully."
+
+        if not new_password:
+
+            return (
+                False,
+                "New password is required."
+            )
+
+
+        if len(new_password) < 8:
+
+            return (
+                False,
+                "Password must contain at least 8 characters."
+            )
+
+
+        password_hash = (
+            UserService
+            ._hash_password(
+                new_password
+            )
+        )
+
+
+        current_time = (
+            UserService
+            ._now()
+        )
+
+
+        try:
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                3,
+                password_hash
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                11,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                12,
+                0
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                13,
+                "NO"
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                16,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                17,
+                modified_by
+            )
+
+
+            return (
+                True,
+                "Password Changed Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to change password: {e}"
+            )
+
+
+    # ======================================================
+    # RESET PASSWORD
+    # ======================================================
 
     @staticmethod
     def reset_password(
@@ -176,79 +628,125 @@ class UserService:
         modified_by="SYSTEM"
     ):
 
-        password_hash = hashlib.sha256(
-            new_password.encode("utf-8")
-        ).hexdigest()
+        return UserService.change_password(
+            row_no,
+            new_password,
+            modified_by
+        )
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
 
-        update_value(USER_MASTER, row_no, 3, password_hash)
-        update_value(USER_MASTER, row_no, 11, current_time)
-        update_value(USER_MASTER, row_no, 12, 0)
-        update_value(USER_MASTER, row_no, 13, "NO")
-        update_value(USER_MASTER, row_no, 16, current_time)
-        update_value(USER_MASTER, row_no, 17, modified_by)
-
-        return True, "Password Reset Successfully."
+    # ======================================================
+    # LOCK USER
+    # ======================================================
 
     @staticmethod
-    def disable_user(
+    def lock_user(
         row_no,
         modified_by="SYSTEM"
     ):
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
-
-        update_value(USER_MASTER, row_no, 9, "INACTIVE")
-        update_value(USER_MASTER, row_no, 16, current_time)
-        update_value(USER_MASTER, row_no, 17, modified_by)
-
-        return True, "User Disabled Successfully."
-
-    @staticmethod
-    def total_users():
-
-        return len(read_all(USER_MASTER))
-
-    @staticmethod
-    def total_role(role):
-
-        users = read_all(USER_MASTER)
-
-        return sum(
-            1
-            for user in users
-            if str(user.get("Role", "")).strip() == role
+        current_time = (
+            UserService
+            ._now()
         )
-        
-    @staticmethod
-    def statistics():
 
-        users = read_all(USER_MASTER)
+        try:
 
-        return {
-
-            "total": len(users),
-
-            "developers": sum(
-                1
-                for u in users
-                if str(u.get("Role", "")) == "Developer"
-            ),
-
-            "admins": sum(
-                1
-                for u in users
-                if str(u.get("Role", "")) == "Admin"
-            ),
-
-            "coordinators": sum(
-                1
-                for u in users
-                if str(u.get("Role", "")) == "Coordinator"
+            update_value(
+                USER_MASTER,
+                row_no,
+                13,
+                "YES"
             )
 
-        }
+            update_value(
+                USER_MASTER,
+                row_no,
+                16,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                17,
+                modified_by
+            )
+
+            return (
+                True,
+                "User Locked Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to lock user: {e}"
+            )
+
+
+    # ======================================================
+    # UNLOCK USER
+    # ======================================================
+
+    @staticmethod
+    def unlock_user(
+        row_no,
+        modified_by="SYSTEM"
+    ):
+
+        current_time = (
+            UserService
+            ._now()
+        )
+
+        try:
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                13,
+                "NO"
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                12,
+                0
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                16,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                17,
+                modified_by
+            )
+
+            return (
+                True,
+                "User Unlocked Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to unlock user: {e}"
+            )
+
+
+    # ======================================================
+    # ENABLE USER
+    # ======================================================
 
     @staticmethod
     def enable_user(
@@ -256,14 +754,101 @@ class UserService:
         modified_by="SYSTEM"
     ):
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+        current_time = (
+            UserService
+            ._now()
+        )
 
-        update_value(USER_MASTER, row_no, 9, "ACTIVE")
-        update_value(USER_MASTER, row_no, 16, current_time)
-        update_value(USER_MASTER, row_no, 17, modified_by)
+        try:
 
-        return True, "User Enabled Successfully."
+            update_value(
+                USER_MASTER,
+                row_no,
+                9,
+                "ACTIVE"
+            )
 
+            update_value(
+                USER_MASTER,
+                row_no,
+                16,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                17,
+                modified_by
+            )
+
+            return (
+                True,
+                "User Enabled Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to enable user: {e}"
+            )
+
+
+    # ======================================================
+    # DISABLE USER
+    # ======================================================
+
+    @staticmethod
+    def disable_user(
+        row_no,
+        modified_by="SYSTEM"
+    ):
+
+        current_time = (
+            UserService
+            ._now()
+        )
+
+        try:
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                9,
+                "INACTIVE"
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                16,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                17,
+                modified_by
+            )
+
+            return (
+                True,
+                "User Disabled Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to disable user: {e}"
+            )
+
+
+    # ======================================================
+    # SOFT DELETE
+    # ======================================================
 
     @staticmethod
     def soft_delete_user(
@@ -271,14 +856,50 @@ class UserService:
         modified_by="SYSTEM"
     ):
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+        current_time = (
+            UserService
+            ._now()
+        )
 
-        update_value(USER_MASTER, row_no, 9, "DELETED")
-        update_value(USER_MASTER, row_no, 16, current_time)
-        update_value(USER_MASTER, row_no, 17, modified_by)
+        try:
 
-        return True, "User Archived Successfully."
+            update_value(
+                USER_MASTER,
+                row_no,
+                9,
+                "DELETED"
+            )
 
+            update_value(
+                USER_MASTER,
+                row_no,
+                16,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                17,
+                modified_by
+            )
+
+            return (
+                True,
+                "User Archived Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to archive user: {e}"
+            )
+
+
+    # ======================================================
+    # CHANGE ROLE
+    # ======================================================
 
     @staticmethod
     def change_role(
@@ -287,14 +908,68 @@ class UserService:
         modified_by="SYSTEM"
     ):
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+        role = str(
+            role or ""
+        ).strip()
 
-        update_value(USER_MASTER, row_no, 4, role)
-        update_value(USER_MASTER, row_no, 16, current_time)
-        update_value(USER_MASTER, row_no, 17, modified_by)
 
-        return True, "Role Updated Successfully."
+        if role not in [
+            ROLE_DEVELOPER,
+            ROLE_ADMIN,
+            ROLE_COORDINATOR
+        ]:
 
+            return (
+                False,
+                "Invalid user role."
+            )
+
+
+        current_time = (
+            UserService
+            ._now()
+        )
+
+
+        try:
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                4,
+                role
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                16,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                17,
+                modified_by
+            )
+
+            return (
+                True,
+                "Role Updated Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to update role: {e}"
+            )
+
+
+    # ======================================================
+    # CHANGE STATUS
+    # ======================================================
 
     @staticmethod
     def change_status(
@@ -303,10 +978,236 @@ class UserService:
         modified_by="SYSTEM"
     ):
 
-        current_time = datetime.now().strftime("%d-%m-%Y %H:%M")
+        status = str(
+            status or ""
+        ).strip().upper()
 
-        update_value(USER_MASTER, row_no, 9, status)
-        update_value(USER_MASTER, row_no, 16, current_time)
-        update_value(USER_MASTER, row_no, 17, modified_by)
 
-        return True, "Status Updated Successfully."
+        if status not in [
+            "ACTIVE",
+            "INACTIVE",
+            "DELETED"
+        ]:
+
+            return (
+                False,
+                "Invalid account status."
+            )
+
+
+        current_time = (
+            UserService
+            ._now()
+        )
+
+
+        try:
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                9,
+                status
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                16,
+                current_time
+            )
+
+            update_value(
+                USER_MASTER,
+                row_no,
+                17,
+                modified_by
+            )
+
+            return (
+                True,
+                "Status Updated Successfully."
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to update status: {e}"
+            )
+
+
+    # ======================================================
+    # ROLE FILTER
+    # ======================================================
+
+    @staticmethod
+    def get_users_by_role(
+        role
+    ):
+
+        role = str(
+            role or ""
+        ).strip().lower()
+
+
+        return [
+
+            user
+
+            for user in (
+                UserService
+                .get_all_users()
+            )
+
+            if str(
+                user.get(
+                    "Role",
+                    ""
+                )
+            ).strip().lower()
+            == role
+
+            and str(
+                user.get(
+                    "Status",
+                    "ACTIVE"
+                )
+            ).strip().upper()
+            != "DELETED"
+
+        ]
+
+
+    # ======================================================
+    # ACTIVE USERS
+    # ======================================================
+
+    @staticmethod
+    def get_active_users():
+
+        return [
+
+            user
+
+            for user in (
+                UserService
+                .get_all_users()
+            )
+
+            if str(
+                user.get(
+                    "Status",
+                    "ACTIVE"
+                )
+            ).strip().upper()
+            == "ACTIVE"
+
+        ]
+
+
+    # ======================================================
+    # STATISTICS
+    # ======================================================
+
+    @staticmethod
+    def statistics():
+
+        users = (
+            UserService
+            .get_all_users()
+        )
+
+
+        active_users = [
+
+            user
+
+            for user in users
+
+            if str(
+                user.get(
+                    "Status",
+                    "ACTIVE"
+                )
+            ).strip().upper()
+            != "DELETED"
+
+        ]
+
+
+        return {
+
+            "total":
+                len(active_users),
+
+            "developers":
+                sum(
+                    1
+                    for user in active_users
+                    if str(
+                        user.get(
+                            "Role",
+                            ""
+                        )
+                    ).strip()
+                    == ROLE_DEVELOPER
+                ),
+
+            "admins":
+                sum(
+                    1
+                    for user in active_users
+                    if str(
+                        user.get(
+                            "Role",
+                            ""
+                        )
+                    ).strip()
+                    == ROLE_ADMIN
+                ),
+
+            "coordinators":
+                sum(
+                    1
+                    for user in active_users
+                    if str(
+                        user.get(
+                            "Role",
+                            ""
+                        )
+                    ).strip()
+                    == ROLE_COORDINATOR
+                )
+
+        }
+
+
+    # ======================================================
+    # TOTAL USERS
+    # ======================================================
+
+    @staticmethod
+    def total_users():
+
+        return len(
+            UserService
+            .get_active_users()
+        )
+
+
+    # ======================================================
+    # TOTAL BY ROLE
+    # ======================================================
+
+    @staticmethod
+    def total_role(
+        role
+    ):
+
+        return len(
+            UserService
+            .get_users_by_role(
+                role
+            )
+        )
