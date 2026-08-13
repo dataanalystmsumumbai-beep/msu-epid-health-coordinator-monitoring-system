@@ -1,20 +1,28 @@
 import streamlit as st
+from datetime import datetime
+
+from core.navigation import require_login
 
 from config.config import (
     ROLE_DEVELOPER,
     ROLE_ADMIN,
     ROLE_COORDINATOR,
-    NOTIFICATIONS
 )
 
-from utils.google_sheet import (
-    read_all,
-    update_value
+from services.task_assignment_service import (
+    TaskAssignmentService
 )
+
+try:
+    from services.daily_review_service import (
+        DailyReviewService
+    )
+except Exception:
+    DailyReviewService = None
 
 
 # ==========================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ==========================================================
 
 st.set_page_config(
@@ -25,50 +33,444 @@ st.set_page_config(
 
 
 # ==========================================================
-# LOGIN CHECK
+# ACCESS
 # ==========================================================
 
-if (
-    "logged_in" not in st.session_state
-    or not st.session_state.logged_in
-):
-
-    st.error("Please login first.")
-    st.stop()
+require_login([
+    ROLE_DEVELOPER,
+    ROLE_ADMIN,
+    ROLE_COORDINATOR
+])
 
 
 # ==========================================================
-# CURRENT USER
+# SESSION
 # ==========================================================
-
-current_user = st.session_state.get(
-    "user",
-    {}
-)
 
 current_role = str(
-    current_user.get(
-        "Role",
+    st.session_state.get(
+        "role",
         ""
     )
 ).strip()
 
 current_user_id = str(
-    current_user.get(
-        "User_ID",
-        current_user.get(
-            "Coordinator_ID",
-            ""
-        )
+    st.session_state.get(
+        "user_id",
+        ""
     )
 ).strip()
 
 current_username = str(
-    current_user.get(
-        "Username",
+    st.session_state.get(
+        "username",
         ""
     )
 ).strip()
+
+
+# ==========================================================
+# HELPERS
+# ==========================================================
+
+def clean(value):
+
+    if value is None:
+        return ""
+
+    return str(value).strip()
+
+
+def get_value(row, *keys):
+
+    if not row:
+        return ""
+
+    for key in keys:
+
+        value = row.get(
+            key,
+            ""
+        )
+
+        if (
+            value is not None
+            and clean(value) != ""
+        ):
+
+            return clean(value)
+
+    return ""
+
+
+def normalize_status(status):
+
+    status = clean(
+        status
+    ).lower()
+
+    if status in [
+        "completed",
+        "complete",
+        "done"
+    ]:
+
+        return "Completed"
+
+    if status in [
+        "in progress",
+        "in-progress",
+        "ongoing",
+        "working"
+    ]:
+
+        return "In Progress"
+
+    if status in [
+        "pending",
+        "not started",
+        "not_started"
+    ]:
+
+        return "Pending"
+
+    return clean(status).title()
+
+
+def load_assignments():
+
+    try:
+
+        return (
+            TaskAssignmentService
+            .get_all_assignments()
+            or []
+        )
+
+    except Exception:
+
+        return []
+
+
+def load_reviews():
+
+    if DailyReviewService is None:
+        return []
+
+    try:
+
+        if hasattr(
+            DailyReviewService,
+            "get_all_reviews"
+        ):
+
+            return (
+                DailyReviewService
+                .get_all_reviews()
+                or []
+            )
+
+        if hasattr(
+            DailyReviewService,
+            "get_all"
+        ):
+
+            return (
+                DailyReviewService
+                .get_all()
+                or []
+            )
+
+        return []
+
+    except Exception:
+
+        return []
+
+
+# ==========================================================
+# LOAD DATA
+# ==========================================================
+
+assignments = load_assignments()
+
+reviews = load_reviews()
+
+
+# ==========================================================
+# ROLE FILTER
+# ==========================================================
+
+if current_role.lower() == "coordinator":
+
+    assignments = [
+
+        assignment
+
+        for assignment in assignments
+
+        if get_value(
+            assignment,
+            "Coordinator_ID",
+            "Coordinator_Id"
+        )
+        == current_user_id
+
+    ]
+
+
+    reviews = [
+
+        review
+
+        for review in reviews
+
+        if get_value(
+            review,
+            "Coordinator_ID",
+            "Coordinator_Id"
+        )
+        == current_user_id
+
+    ]
+
+
+# ==========================================================
+# BUILD NOTIFICATIONS
+# ==========================================================
+
+notifications = []
+
+
+# ==========================================================
+# TASK NOTIFICATIONS
+# ==========================================================
+
+for assignment in assignments:
+
+    status = normalize_status(
+        get_value(
+            assignment,
+            "Status"
+        )
+    )
+
+    task_id = get_value(
+        assignment,
+        "Task_ID",
+        "Task_Id"
+    )
+
+    assignment_id = get_value(
+        assignment,
+        "Assignment_ID",
+        "Assignment_Id"
+    )
+
+    due_date = get_value(
+        assignment,
+        "Due_Date",
+        "Due Date"
+    )
+
+    assigned_date = get_value(
+        assignment,
+        "Assigned_Date",
+        "Assigned Date"
+    )
+
+    priority = get_value(
+        assignment,
+        "Priority"
+    )
+
+    remarks = get_value(
+        assignment,
+        "Remarks"
+    )
+
+
+    if status == "Pending":
+
+        notifications.append(
+            {
+                "type": "task",
+                "icon": "⏳",
+                "title": "Pending Task",
+                "message":
+                    f"Task {task_id or assignment_id} "
+                    f"is currently pending.",
+                "priority": priority or "Medium",
+                "date": assigned_date,
+                "sort": 1
+            }
+        )
+
+
+    elif status == "In Progress":
+
+        notifications.append(
+            {
+                "type": "task",
+                "icon": "🔄",
+                "title": "Task In Progress",
+                "message":
+                    f"Task {task_id or assignment_id} "
+                    f"is currently in progress.",
+                "priority": priority or "Medium",
+                "date": assigned_date,
+                "sort": 2
+            }
+        )
+
+
+    if due_date:
+
+        notifications.append(
+            {
+                "type": "deadline",
+                "icon": "📅",
+                "title": "Task Due Date",
+                "message":
+                    f"Task {task_id or assignment_id} "
+                    f"has due date {due_date}.",
+                "priority": priority or "Medium",
+                "date": due_date,
+                "sort": 3
+            }
+        )
+
+
+    if priority.lower() in [
+        "high",
+        "critical",
+        "urgent"
+    ]:
+
+        notifications.append(
+            {
+                "type": "priority",
+                "icon": "🚨",
+                "title": "High Priority Task",
+                "message":
+                    f"Task {task_id or assignment_id} "
+                    f"has {priority} priority.",
+                "priority": priority,
+                "date": assigned_date,
+                "sort": 0
+            }
+        )
+
+
+# ==========================================================
+# REVIEW NOTIFICATIONS
+# ==========================================================
+
+for review in reviews:
+
+    review_status = normalize_status(
+        get_value(
+            review,
+            "Status",
+            "Review_Status"
+        )
+    )
+
+    task_id = get_value(
+        review,
+        "Task_ID",
+        "Task_Id"
+    )
+
+    review_date = get_value(
+        review,
+        "Review_Date",
+        "Review Date",
+        "Date"
+    )
+
+    progress = get_value(
+        review,
+        "Progress",
+        "Progress_Update",
+        "Update"
+    )
+
+    remarks = get_value(
+        review,
+        "Remarks",
+        "Comment",
+        "Comments"
+    )
+
+
+    if review_status == "Completed":
+
+        notifications.append(
+            {
+                "type": "review",
+                "icon": "✅",
+                "title": "Daily Review Completed",
+                "message":
+                    f"Daily Review submitted for "
+                    f"Task {task_id}.",
+                "priority": "Normal",
+                "date": review_date,
+                "sort": 1
+            }
+        )
+
+
+    elif review_status == "In Progress":
+
+        notifications.append(
+            {
+                "type": "review",
+                "icon": "🔄",
+                "title": "Daily Review In Progress",
+                "message":
+                    f"Daily Review for Task {task_id} "
+                    f"is marked In Progress.",
+                "priority": "Normal",
+                "date": review_date,
+                "sort": 2
+            }
+        )
+
+
+    elif review_status == "Pending":
+
+        notifications.append(
+            {
+                "type": "review",
+                "icon": "⚠️",
+                "title": "Pending Daily Review",
+                "message":
+                    f"Daily Review for Task {task_id} "
+                    f"is still pending.",
+                "priority": "High",
+                "date": review_date,
+                "sort": 0
+            }
+        )
+
+
+# ==========================================================
+# SORT
+# ==========================================================
+
+notifications.sort(
+    key=lambda x: (
+        x.get(
+            "sort",
+            99
+        ),
+        x.get(
+            "date",
+            ""
+        )
+    )
+)
 
 
 # ==========================================================
@@ -80,204 +482,89 @@ st.title(
 )
 
 st.caption(
-    f"Welcome, {current_username}"
+    f"User: {current_username} | Role: {current_role}"
 )
 
 st.divider()
 
 
 # ==========================================================
-# LOAD NOTIFICATIONS
+# METRICS
 # ==========================================================
 
-try:
+total_notifications = len(
+    notifications
+)
 
-    notifications = read_all(
-        NOTIFICATIONS
+high_priority = sum(
+    1
+    for notification in notifications
+    if notification.get(
+        "priority",
+        ""
+    ).lower()
+    in [
+        "high",
+        "critical",
+        "urgent"
+    ]
+)
+
+task_notifications = sum(
+    1
+    for notification in notifications
+    if notification.get(
+        "type"
     )
+    in [
+        "task",
+        "deadline",
+        "priority"
+    ]
+)
 
-except Exception as e:
-
-    st.error(
-        f"Unable to load notifications: {e}"
+review_notifications = sum(
+    1
+    for notification in notifications
+    if notification.get(
+        "type"
     )
-
-    notifications = []
-
-
-# ==========================================================
-# HELPER
-# ==========================================================
-
-def normalize(value):
-
-    return str(
-        value if value is not None else ""
-    ).strip()
+    == "review"
+)
 
 
-# ==========================================================
-# FILTER USER NOTIFICATIONS
-# ==========================================================
+c1, c2, c3, c4 = st.columns(4)
 
-visible_notifications = []
-
-
-for row_number, notification in enumerate(
-    notifications,
-    start=2
-):
-
-    target_user_id = normalize(
-        notification.get(
-            "User_ID",
-            notification.get(
-                "User_Id",
-                notification.get(
-                    "Coordinator_ID",
-                    ""
-                )
-            )
-        )
-    )
-
-    target_username = normalize(
-        notification.get(
-            "Username",
-            ""
-        )
-    )
-
-
-    target_role = normalize(
-        notification.get(
-            "Role",
-            ""
-        )
-    )
-
-
-    # ------------------------------------------------------
-    # ADMIN / DEVELOPER BROAD NOTIFICATIONS
-    # ------------------------------------------------------
-
-    is_global = target_user_id == "" and target_username == ""
-
-
-    # ------------------------------------------------------
-    # USER MATCH
-    # ------------------------------------------------------
-
-    user_match = (
-
-        target_user_id
-        and target_user_id == current_user_id
-
-    ) or (
-
-        target_username
-        and target_username.lower()
-        == current_username.lower()
-
-    )
-
-
-    # ------------------------------------------------------
-    # ROLE MATCH
-    # ------------------------------------------------------
-
-    role_match = (
-
-        target_role
-        and target_role.upper()
-        == current_role.upper()
-
-    )
-
-
-    if (
-        is_global
-        or user_match
-        or role_match
-    ):
-
-        visible_notifications.append(
-            (
-                row_number,
-                notification
-            )
-        )
-
-
-# ==========================================================
-# COUNTS
-# ==========================================================
-
-unread_notifications = []
-
-for row_number, notification in visible_notifications:
-
-    read_status = normalize(
-        notification.get(
-            "Read",
-            notification.get(
-                "Is_Read",
-                notification.get(
-                    "Status",
-                    ""
-                )
-            )
-        )
-    ).upper()
-
-    if read_status not in [
-        "YES",
-        "READ",
-        "TRUE"
-    ]:
-
-        unread_notifications.append(
-            (
-                row_number,
-                notification
-            )
-        )
-
-
-# ==========================================================
-# SUMMARY
-# ==========================================================
-
-c1, c2, c3 = st.columns(3)
 
 with c1:
 
     st.metric(
-        "🔔 Total Notifications",
-        len(
-            visible_notifications
-        )
+        "🔔 Total",
+        total_notifications
     )
+
 
 with c2:
 
     st.metric(
-        "🟠 Unread",
-        len(
-            unread_notifications
-        )
+        "🚨 High Priority",
+        high_priority
     )
+
 
 with c3:
 
     st.metric(
-        "⚪ Read",
-        len(
-            visible_notifications
-        )
-        - len(
-            unread_notifications
-        )
+        "📋 Task Alerts",
+        task_notifications
+    )
+
+
+with c4:
+
+    st.metric(
+        "📝 Review Alerts",
+        review_notifications
     )
 
 
@@ -285,264 +572,212 @@ st.divider()
 
 
 # ==========================================================
-# MARK ALL AS READ
+# FILTER
 # ==========================================================
 
-if unread_notifications:
-
-    if st.button(
-        "✅ Mark All as Read",
-        use_container_width=True,
-        key="mark_all_notifications_read"
-    ):
-
-        success_count = 0
-
-        for row_number, notification in unread_notifications:
-
-            try:
-
-                # Expected Read column = 8
-                update_value(
-                    NOTIFICATIONS,
-                    row_number,
-                    8,
-                    "YES"
-                )
-
-                success_count += 1
-
-            except Exception:
-                pass
+st.subheader(
+    "🔎 Notification Filter"
+)
 
 
-        if success_count:
+filter_col1, filter_col2 = st.columns(2)
 
-            st.success(
-                f"{success_count} notification(s) marked as read."
-            )
 
-            st.rerun()
+with filter_col1:
 
-        else:
+    notification_filter = st.selectbox(
+        "Notification Type",
+        [
+            "All",
+            "Task",
+            "Deadline",
+            "Priority",
+            "Review"
+        ],
+        key="notification_type_filter"
+    )
 
-            st.error(
-                "Unable to update notifications."
-            )
+
+with filter_col2:
+
+    priority_filter = st.selectbox(
+        "Priority",
+        [
+            "All",
+            "High",
+            "Critical",
+            "Urgent",
+            "Medium",
+            "Normal",
+            "Low"
+        ],
+        key="notification_priority_filter"
+    )
+
+
+filtered_notifications = []
+
+
+for notification in notifications:
+
+    ntype = notification.get(
+        "type",
+        ""
+    )
+
+    priority = notification.get(
+        "priority",
+        ""
+    )
+
+
+    if notification_filter != "All":
+
+        allowed_types = {
+
+            "Task": [
+                "task"
+            ],
+
+            "Deadline": [
+                "deadline"
+            ],
+
+            "Priority": [
+                "priority"
+            ],
+
+            "Review": [
+                "review"
+            ]
+
+        }
+
+        if ntype not in allowed_types.get(
+            notification_filter,
+            []
+        ):
+
+            continue
+
+
+    if priority_filter != "All":
+
+        if priority.lower() != priority_filter.lower():
+
+            continue
+
+
+    filtered_notifications.append(
+        notification
+    )
 
 
 # ==========================================================
-# NOTIFICATION LIST
+# DISPLAY
 # ==========================================================
 
-if not visible_notifications:
+st.subheader(
+    "📢 Notifications"
+)
 
-    st.info(
+
+if not filtered_notifications:
+
+    st.success(
         "🎉 No notifications available."
     )
 
 else:
 
-    # Show newest records first
-    ordered_notifications = list(
-        reversed(
-            visible_notifications
-        )
-    )
-
-
-    for index, (
-        row_number,
-        notification
-    ) in enumerate(
-        ordered_notifications
+    for index, notification in enumerate(
+        filtered_notifications
     ):
 
-        title = normalize(
-            notification.get(
-                "Title",
-                notification.get(
-                    "Notification_Title",
-                    "Notification"
-                )
-            )
+        icon = notification.get(
+            "icon",
+            "🔔"
         )
 
-
-        message = normalize(
-            notification.get(
-                "Message",
-                notification.get(
-                    "Notification",
-                    notification.get(
-                        "Description",
-                        ""
-                    )
-                )
-            )
+        title = notification.get(
+            "title",
+            "Notification"
         )
 
-
-        notification_type = normalize(
-            notification.get(
-                "Type",
-                notification.get(
-                    "Notification_Type",
-                    "INFO"
-                )
-            )
-        ).upper()
-
-
-        created_at = normalize(
-            notification.get(
-                "Created_At",
-                notification.get(
-                    "CreatedAt",
-                    notification.get(
-                        "Date",
-                        ""
-                    )
-                )
-            )
+        message = notification.get(
+            "message",
+            ""
         )
 
+        priority = notification.get(
+            "priority",
+            "Normal"
+        )
 
-        read_status = normalize(
-            notification.get(
-                "Read",
-                notification.get(
-                    "Is_Read",
-                    notification.get(
-                        "Status",
-                        ""
-                    )
-                )
-            )
-        ).upper()
+        date = notification.get(
+            "date",
+            ""
+        )
 
-
-        is_read = read_status in [
-            "YES",
-            "READ",
-            "TRUE"
-        ]
-
-
-        # --------------------------------------------------
-        # TYPE ICON
-        # --------------------------------------------------
-
-        if notification_type in [
-            "SUCCESS",
-            "COMPLETED"
-        ]:
-
-            icon = "🟢"
-
-        elif notification_type in [
-            "WARNING",
-            "ALERT"
-        ]:
-
-            icon = "🟠"
-
-        elif notification_type in [
-            "ERROR",
-            "URGENT"
-        ]:
-
-            icon = "🔴"
-
-        else:
-
-            icon = "🔵"
-
-
-        # --------------------------------------------------
-        # DISPLAY
-        # --------------------------------------------------
 
         with st.container(
             border=True
         ):
 
             col1, col2 = st.columns(
-                [8, 2]
+                [
+                    1,
+                    8
+                ]
             )
 
 
             with col1:
 
-                if is_read:
-
-                    st.markdown(
-                        f"#### {icon} {title}"
-                    )
-
-                else:
-
-                    st.markdown(
-                        f"#### 🔔 {icon} {title}"
-                    )
-
-
-                if message:
-
-                    st.write(
-                        message
-                    )
-
-
-                if created_at:
-
-                    st.caption(
-                        f"🕒 {created_at}"
-                    )
+                st.markdown(
+                    f"# {icon}"
+                )
 
 
             with col2:
 
-                if is_read:
+                st.markdown(
+                    f"### {title}"
+                )
 
-                    st.caption(
-                        "✓ Read"
+                st.write(
+                    message
+                )
+
+                meta = (
+                    f"**Priority:** {priority}"
+                )
+
+                if date:
+
+                    meta += (
+                        f"  |  **Date:** {date}"
                     )
 
-                else:
-
-                    st.caption(
-                        "● Unread"
-                    )
+                st.caption(
+                    meta
+                )
 
 
-                    if st.button(
-                        "Mark Read",
-                        key=(
-                            f"mark_read_"
-                            f"{row_number}_"
-                            f"{index}"
-                        ),
-                        use_container_width=True
-                    ):
+# ==========================================================
+# REFRESH
+# ==========================================================
 
-                        try:
+st.divider()
 
-                            # Expected Read column = 8
-                            update_value(
-                                NOTIFICATIONS,
-                                row_number,
-                                8,
-                                "YES"
-                            )
 
-                            st.rerun()
+if st.button(
+    "🔄 Refresh Notifications",
+    use_container_width=True,
+    key="refresh_notifications"
+):
 
-                        except Exception as e:
-
-                            st.error(
-                                f"Unable to mark as read: {e}"
-                            )
+    st.rerun()
 
 
 # ==========================================================
@@ -552,6 +787,5 @@ else:
 st.divider()
 
 st.caption(
-    "Notifications are displayed according to your "
-    "user account / role."
+    "Notifications • Coordinator Monitoring & Task Management System"
 )
