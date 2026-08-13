@@ -1,11 +1,16 @@
-from config.config import USER_MASTER
+from config.config import (
+    USER_MASTER,
+    MAX_LOGIN_ATTEMPTS
+)
 
 from utils.google_sheet import (
     read_all,
     update_value
 )
 
-from utils.security import verify_password
+from utils.security import (
+    verify_password
+)
 
 from utils.logger import (
     save_login_history,
@@ -15,67 +20,161 @@ from utils.logger import (
 
 class AuthService:
 
+    # ======================================================
+    # AUTHENTICATE
+    # ======================================================
+
     @staticmethod
-    def authenticate(username, password):
+    def authenticate(
+        username,
+        password
+    ):
 
-        if not username.strip() or not password:
-            return False, "Username and Password are required."
+        username = str(
+            username or ""
+        ).strip().lower()
 
-        username = username.strip().lower()
+        password = str(
+            password or ""
+        )
 
-        users = read_all(USER_MASTER)
 
-        for row_no, user in enumerate(users, start=2):
+        if not username or not password:
+
+            return (
+                False,
+                "Username and Password are required."
+            )
+
+
+        try:
+
+            users = (
+                read_all(
+                    USER_MASTER
+                )
+                or []
+            )
+
+        except Exception as e:
+
+            return (
+                False,
+                f"Unable to read User Master: {e}"
+            )
+
+
+        for row_no, user in enumerate(
+            users,
+            start=2
+        ):
 
             db_username = str(
-                user.get("Username", "")
+                user.get(
+                    "Username",
+                    ""
+                )
             ).strip().lower()
+
 
             if db_username != username:
                 continue
 
-            # -------------------------
-            # Status Check
-            # -------------------------
 
-            if str(
-                user.get("Status", "ACTIVE")
-            ).upper() != "ACTIVE":
+            # ==================================================
+            # ACCOUNT STATUS
+            # ==================================================
 
-                return False, "Account Disabled"
+            status = str(
+                user.get(
+                    "Status",
+                    "ACTIVE"
+                )
+            ).strip().upper()
 
-            # -------------------------
-            # Locked Check
-            # -------------------------
 
-            if str(
-                user.get("Account_Locked", "NO")
-            ).upper() == "YES":
+            if status != "ACTIVE":
 
-                return False, "Account Locked"
+                return (
+                    False,
+                    "Account Disabled"
+                )
 
-            # -------------------------
-            # Password Verify
-            # -------------------------
 
-            password_hash = user.get(
-                "Password_Hash",
-                ""
-            )
+            # ==================================================
+            # ACCOUNT LOCK
+            # ==================================================
 
-            if not verify_password(
-                password,
-                password_hash
-            ):
+            locked = str(
+                user.get(
+                    "Account_Locked",
+                    "NO"
+                )
+            ).strip().upper()
+
+
+            if locked == "YES":
+
+                return (
+                    False,
+                    "Account Locked. Contact an authorised administrator."
+                )
+
+
+            # ==================================================
+            # PASSWORD
+            # ==================================================
+
+            password_hash = str(
+                user.get(
+                    "Password_Hash",
+                    ""
+                )
+            ).strip()
+
+
+            if not password_hash:
+
+                return (
+                    False,
+                    "Password is not configured for this account."
+                )
+
+
+            try:
+
+                valid_password = verify_password(
+                    password,
+                    password_hash
+                )
+
+            except Exception:
+
+                valid_password = False
+
+
+            # ==================================================
+            # INVALID PASSWORD
+            # ==================================================
+
+            if not valid_password:
 
                 try:
+
                     attempts = int(
-                        user.get("Login_Attempts", 0)
+                        user.get(
+                            "Login_Attempts",
+                            0
+                        )
                     )
+
                 except Exception:
+
                     attempts = 0
 
+
                 attempts += 1
+
 
                 update_value(
                     USER_MASTER,
@@ -84,7 +183,8 @@ class AuthService:
                     attempts
                 )
 
-                if attempts >= 5:
+
+                if attempts >= MAX_LOGIN_ATTEMPTS:
 
                     update_value(
                         USER_MASTER,
@@ -93,13 +193,40 @@ class AuthService:
                         "YES"
                     )
 
-                    return False, "Account Locked"
 
-                return False, "Invalid Password"
+                    try:
 
-            # -------------------------
-            # Reset Login Attempts
-            # -------------------------
+                        save_audit(
+                            user,
+                            "ACCOUNT_LOCKED"
+                        )
+
+                    except Exception:
+                        pass
+
+
+                    return (
+                        False,
+                        "Account Locked"
+                    )
+
+
+                remaining = (
+                    MAX_LOGIN_ATTEMPTS
+                    - attempts
+                )
+
+
+                return (
+                    False,
+                    f"Invalid Password. "
+                    f"{remaining} attempt(s) remaining."
+                )
+
+
+            # ==================================================
+            # SUCCESS
+            # ==================================================
 
             update_value(
                 USER_MASTER,
@@ -108,20 +235,76 @@ class AuthService:
                 0
             )
 
+
             update_value(
                 USER_MASTER,
                 row_no,
-                10,
+                11,
                 "YES"
             )
 
-            save_login_history(user)
+
+            # ==================================================
+            # AUDIT / LOGIN HISTORY
+            # ==================================================
+
+            try:
+
+                save_login_history(
+                    user
+                )
+
+            except Exception:
+                pass
+
+
+            try:
+
+                save_audit(
+                    user,
+                    "LOGIN"
+                )
+
+            except Exception:
+                pass
+
+
+            return (
+                True,
+                user
+            )
+
+
+        # ======================================================
+        # USER NOT FOUND
+        # ======================================================
+
+        return (
+            False,
+            "User Not Found"
+        )
+
+
+    # ======================================================
+    # LOGOUT
+    # ======================================================
+
+    @staticmethod
+    def logout(user):
+
+        if not user:
+            return False
+
+
+        try:
 
             save_audit(
                 user,
-                "LOGIN"
+                "LOGOUT"
             )
 
-            return True, user
+        except Exception:
+            pass
 
-        return False, "User Not Found"
+
+        return True
