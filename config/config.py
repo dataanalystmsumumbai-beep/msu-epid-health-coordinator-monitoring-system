@@ -1,8 +1,9 @@
 import streamlit as st
 from google.oauth2.service_account import Credentials
 
+
 # ======================================================
-# Google Credentials
+# GOOGLE SHEET CONFIGURATION
 # ======================================================
 
 SCOPES = [
@@ -10,10 +11,13 @@ SCOPES = [
     "https://www.googleapis.com/auth/drive"
 ]
 
-SHEET_NAME = "MSU-EPID Health Coordinator Monitoring System Database"
+SHEET_NAME = (
+    "MSU-EPID Health Coordinator Monitoring System Database"
+)
 
 
 def get_google_credentials():
+
     return Credentials.from_service_account_info(
         st.secrets["gcp_service_account"],
         scopes=SCOPES
@@ -21,10 +25,13 @@ def get_google_credentials():
 
 
 # ======================================================
-# Google Sheet Names
+# GOOGLE SHEET NAMES
 # ======================================================
 
 USER_MASTER = "01_User_Master"
+
+# Backward compatibility
+USERS = USER_MASTER
 
 COORDINATOR_MASTER = "02_Coordinator_Master"
 
@@ -46,10 +53,12 @@ NOTIFICATIONS = "10_Notifications"
 
 
 # ======================================================
-# Application
+# APPLICATION
 # ======================================================
 
-APP_NAME = "MSU EPID Health Coordinator Monitoring System"
+APP_NAME = (
+    "MSU EPID Health Coordinator Monitoring System"
+)
 
 APP_VERSION = "3.0.0"
 
@@ -59,7 +68,7 @@ APP_ENVIRONMENT = "Production"
 
 
 # ======================================================
-# Security
+# SECURITY
 # ======================================================
 
 PASSWORD_MIN_LENGTH = 8
@@ -74,7 +83,7 @@ ALLOWED_SPECIAL_CHARACTERS = "@#$-._"
 
 
 # ======================================================
-# Roles
+# ROLES
 # ======================================================
 
 ROLE_DEVELOPER = "Developer"
@@ -91,14 +100,14 @@ ROLES = [
 
 
 # ======================================================
-# Coordinator
+# COORDINATOR
 # ======================================================
 
 MAX_COORDINATOR_EDIT = 6
 
 
 # ======================================================
-# Status
+# STATUS
 # ======================================================
 
 STATUS_ACTIVE = "ACTIVE"
@@ -111,7 +120,7 @@ STATUS_COMPLETED = "COMPLETED"
 
 
 # ======================================================
-# Date Formats
+# DATE / TIME FORMATS
 # ======================================================
 
 DATE_FORMAT = "%d-%m-%Y"
@@ -122,7 +131,7 @@ TIME_FORMAT = "%H:%M"
 
 
 # ======================================================
-# Dashboard Refresh
+# DASHBOARD
 # ======================================================
 
 AUTO_REFRESH_SECONDS = 300
