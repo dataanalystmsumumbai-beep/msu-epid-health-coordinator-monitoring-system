@@ -1,55 +1,50 @@
 import streamlit as st
 
+from core.navigation import require_login
+
 from config.config import (
     ROLE_DEVELOPER,
     ROLE_ADMIN,
-    ROLE_COORDINATOR,
-    APP_NAME,
-    APP_VERSION,
-    APP_OWNER,
-    APP_ENVIRONMENT
+    ROLE_COORDINATOR
 )
 
 
 # ==========================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ==========================================================
 
 st.set_page_config(
     page_title="Help Center",
-    page_icon="❓",
+    page_icon="🆘",
     layout="wide"
 )
 
 
 # ==========================================================
-# LOGIN CHECK
+# ACCESS
 # ==========================================================
 
-if (
-    "logged_in" not in st.session_state
-    or not st.session_state.logged_in
-):
-
-    st.error(
-        "Please login first."
-    )
-
-    st.stop()
+require_login([
+    ROLE_DEVELOPER,
+    ROLE_ADMIN,
+    ROLE_COORDINATOR
+])
 
 
 # ==========================================================
-# USER
+# SESSION
 # ==========================================================
-
-current_user = st.session_state.get(
-    "user",
-    {}
-)
 
 current_role = str(
-    current_user.get(
-        "Role",
+    st.session_state.get(
+        "role",
+        ""
+    )
+).strip()
+
+current_username = str(
+    st.session_state.get(
+        "username",
         ""
     )
 ).strip()
@@ -59,53 +54,86 @@ current_role = str(
 # HEADER
 # ==========================================================
 
-st.title(
-    "❓ Help Center"
-)
+st.title("🆘 Help Center")
 
 st.caption(
-    "MSU / EPID Health Coordinator Monitoring System"
+    f"User: {current_username} | Role: {current_role}"
 )
 
 st.divider()
 
 
 # ==========================================================
-# SYSTEM INFORMATION
+# QUICK HELP
 # ==========================================================
 
-st.subheader(
-    "ℹ️ System Information"
-)
+st.subheader("🚀 Quick Help")
 
-c1, c2, c3, c4 = st.columns(4)
+c1, c2, c3 = st.columns(3)
+
 
 with c1:
 
-    st.metric(
-        "Application",
-        APP_NAME
+    st.markdown(
+        """
+        ### 👥 User Management
+
+        **Developer**
+        - Create Admin users
+        - Create Coordinator users
+        - Change Admin passwords
+        - Change Coordinator passwords
+        - Enable / disable users
+
+        **Admin**
+        - Create Coordinator users
+        - Change Coordinator passwords
+        - Enable / disable Coordinators
+        """
     )
+
 
 with c2:
 
-    st.metric(
-        "Version",
-        APP_VERSION
+    st.markdown(
+        """
+        ### 📋 Task Management
+
+        **Developer / Admin**
+        - View all tasks
+        - Assign tasks to Coordinators
+        - Set assigned date
+        - Set due date
+        - Set priority
+        - Add assignment remarks
+
+        **Coordinator**
+        - View assigned tasks
+        - Track task status
+        - Submit Daily Review
+        """
     )
+
 
 with c3:
 
-    st.metric(
-        "Owner",
-        APP_OWNER
-    )
+    st.markdown(
+        """
+        ### 📝 Daily Review
 
-with c4:
+        **Coordinator**
+        1. Open Daily Review
+        2. Select assigned task
+        3. Select review date
+        4. Select status
+        5. Enter progress / remarks
+        6. Click **Submit Daily Review**
 
-    st.metric(
-        "Environment",
-        APP_ENVIRONMENT
+        **Admin / Developer**
+        - Monitor all submitted reviews
+        - View Coordinator-wise progress
+        - Check completion percentage
+        """
     )
 
 
@@ -113,259 +141,254 @@ st.divider()
 
 
 # ==========================================================
-# ROLE BASED HELP
+# ROLE BASED GUIDE
 # ==========================================================
 
-st.subheader(
-    "👤 Your Role"
-)
-
-st.info(
-    f"You are logged in as **{current_role}**."
-)
+st.subheader("🎯 Role-wise Guide")
 
 
-# ==========================================================
-# COORDINATOR
-# ==========================================================
-
-if current_role == ROLE_COORDINATOR:
+if current_role.lower() == "developer":
 
     with st.expander(
-        "📋 How to manage assigned tasks",
+        "👨‍💻 Developer Guide",
         expanded=True
     ):
 
         st.markdown(
             """
-            1. Open **Task Management**.
-            2. Review your assigned tasks.
-            3. Check the priority and due date.
-            4. Complete the assigned work.
-            5. Submit the task as completed.
-            """
-        )
+            ### Developer
 
+            The Developer has the highest system-management access.
 
-    with st.expander(
-        "📝 How to submit Daily Review"
-    ):
+            **Main responsibilities**
 
-        st.markdown(
-            """
-            1. Open **Daily Review**.
-            2. Select the assigned task.
-            3. Select the review date.
-            4. Select the current status.
-            5. Enter your progress / remarks.
-            6. Click **Submit Daily Review**.
-            """
-        )
-
-
-    with st.expander(
-        "📊 Understanding your progress"
-    ):
-
-        st.markdown(
-            """
-            - **Assigned** = Total tasks assigned to you.
-            - **Completed** = Tasks submitted as completed.
-            - **Pending** = Tasks not yet completed.
-            - **Progress** = Completed tasks as a percentage of assigned tasks.
-            """
-        )
-
-
-# ==========================================================
-# ADMIN
-# ==========================================================
-
-elif current_role == ROLE_ADMIN:
-
-    with st.expander(
-        "👥 User Management"
-    ):
-
-        st.markdown(
-            """
-            As an Admin you can manage **Coordinator**
-            account passwords.
-
-            You cannot change Developer or Admin passwords.
-            """
-        )
-
-
-    with st.expander(
-        "📋 Task Management"
-    ):
-
-        st.markdown(
-            """
-            As an Admin you can:
-
-            - View active tasks
-            - View active Coordinators
-            - Assign tasks to Coordinators
-            - Set due dates
-            - Set priority
-            - Add assignment remarks
+            - Manage Admin accounts
+            - Manage Coordinator accounts
+            - Reset passwords
+            - Enable / disable users
             - Monitor task assignments
-            """
+            - Monitor Daily Reviews
+            - Check overall system activity
+
+            **Recommended workflow**
+
+            `User Management`
+            → `Task Management`
+            → `Daily Review`
+            → `Developer Dashboard`
+            """ 
         )
 
 
+elif current_role.lower() == "admin":
+
     with st.expander(
-        "📊 Daily Review"
+        "🧑‍💼 Admin Guide",
+        expanded=True
     ):
 
         st.markdown(
             """
-            Daily Review allows Admin users to monitor:
+            ### Admin
 
-            - Total submitted reviews
-            - Completed reviews
-            - Pending reviews
-            - In-progress reviews
-            - Coordinator review activity
+            Admin manages operational users and daily work.
+
+            **Main responsibilities**
+
+            - Manage Coordinators
+            - Reset Coordinator passwords
+            - Enable / disable Coordinators
+            - Assign tasks
+            - Monitor Daily Reviews
+            - Review Coordinator performance
+
+            **Recommended workflow**
+
+            `User Management`
+            → `Task Management`
+            → `Daily Review`
+            → `Admin Dashboard`
             """
         )
 
 
-# ==========================================================
-# DEVELOPER
-# ==========================================================
-
-elif current_role == ROLE_DEVELOPER:
+elif current_role.lower() == "coordinator":
 
     with st.expander(
-        "🛠️ Developer Responsibilities"
+        "👨‍⚕️ Coordinator Guide",
+        expanded=True
     ):
 
         st.markdown(
             """
-            Developer users have the highest application-level
-            management access.
+            ### Coordinator
 
-            Developer can manage:
+            Coordinator is responsible for completing assigned work
+            and submitting daily progress.
 
-            - Admin passwords
-            - Coordinator passwords
-            - Task assignments
-            - System monitoring
-            - Daily Review monitoring
+            **Daily workflow**
+
+            1. Open **Task Management**
+            2. Check assigned tasks
+            3. Complete / work on assigned task
+            4. Open **Daily Review**
+            5. Select the task
+            6. Select the current status
+            7. Enter progress / remarks
+            8. Click **Submit Daily Review**
+
+            The submitted review becomes visible to Admin
+            and Developer monitoring dashboards.
             """
         )
 
-
-    with st.expander(
-        "🔐 Password Management"
-    ):
-
-        st.markdown(
-            """
-            Developer can reset passwords for:
-
-            - Admin
-            - Coordinator
-
-            Password reset also resets failed login attempts
-            and unlocks the selected account.
-            """
-        )
-
-
-    with st.expander(
-        "📊 Monitoring"
-    ):
-
-        st.markdown(
-            """
-            Developer can monitor task assignments and
-            Daily Review submissions across the system.
-            """
-        )
-
-
-# ==========================================================
-# GENERAL FAQ
-# ==========================================================
 
 st.divider()
 
-st.subheader(
-    "❓ Frequently Asked Questions"
+
+# ==========================================================
+# STATUS DEFINITIONS
+# ==========================================================
+
+st.subheader("📊 Status Definitions")
+
+status_data = {
+    "Status": [
+        "Pending",
+        "In Progress",
+        "Completed",
+        "Disabled"
+    ],
+    "Meaning": [
+        "Task has been assigned but work has not started.",
+        "Task is currently being worked on.",
+        "Task has been completed and submitted.",
+        "User account is temporarily inactive."
+    ]
+}
+
+st.table(
+    status_data
 )
 
-
-with st.expander(
-    "Why can't I see a task?"
-):
-
-    st.write(
-        "A task must be assigned to your Coordinator account "
-        "before it appears in your assigned task list."
-    )
-
-
-with st.expander(
-    "Why can't I submit the same Daily Review twice?"
-):
-
-    st.write(
-        "The system prevents duplicate Daily Review "
-        "submissions for the same user, task and date."
-    )
-
-
-with st.expander(
-    "What happens when I submit a task as Completed?"
-):
-
-    st.write(
-        "The corresponding task assignment status is updated "
-        "to Completed."
-    )
-
-
-with st.expander(
-    "What happens if my account is locked?"
-):
-
-    st.write(
-        "After repeated failed password attempts, an account "
-        "can become locked. An authorized Developer or Admin "
-        "can reset the account according to their permissions."
-    )
-
-
-with st.expander(
-    "Who can change passwords?"
-):
-
-    st.write(
-        "Developer can manage Admin and Coordinator passwords. "
-        "Admin can manage Coordinator passwords."
-    )
-
-
-# ==========================================================
-# CONTACT / SYSTEM NOTE
-# ==========================================================
 
 st.divider()
 
-st.subheader(
-    "📞 Support"
-)
+
+# ==========================================================
+# FREQUENTLY ASKED QUESTIONS
+# ==========================================================
+
+st.subheader("❓ Frequently Asked Questions")
+
+
+with st.expander(
+    "Why can't a Coordinator see a task?"
+):
+
+    st.write(
+        """
+        Check whether the task has been assigned to the correct
+        Coordinator from **Task Management → Assign Task**.
+        """
+    )
+
+
+with st.expander(
+    "Why can't a Coordinator submit Daily Review?"
+):
+
+    st.write(
+        """
+        A Daily Review can be submitted only for an active task
+        assigned to the logged-in Coordinator.
+
+        Check:
+
+        - Coordinator ID
+        - Task ID
+        - Assignment status
+        - Active assignment
+        """
+    )
+
+
+with st.expander(
+    "Can Admin change a Developer password?"
+):
+
+    st.write(
+        """
+        No.
+
+        Developer accounts are controlled by the Developer role.
+
+        Admin can manage Coordinator accounts.
+        """
+    )
+
+
+with st.expander(
+    "Can Developer change Admin and Coordinator passwords?"
+):
+
+    st.write(
+        """
+        Yes.
+
+        Developer has the highest user-management permission
+        in the system.
+        """
+    )
+
+
+with st.expander(
+    "What happens after a Coordinator submits Daily Review?"
+):
+
+    st.write(
+        """
+        The review is stored in the Daily Review data source and
+        becomes available for Admin / Developer monitoring.
+
+        The related assignment status is also updated.
+        """
+    )
+
+
+with st.expander(
+    "How is the completion percentage calculated?"
+):
+
+    st.write(
+        """
+        Completion percentage is calculated from completed reviews
+        compared with the total submitted reviews.
+        """
+    )
+
+
+st.divider()
+
+
+# ==========================================================
+# SUPPORT
+# ==========================================================
+
+st.subheader("📞 Support")
 
 st.info(
-    "For system configuration, database or application-level "
-    "issues, contact the authorized MSU / EPID system administrator."
+    """
+    If an unexpected error occurs:
+
+    1. Note the page name.
+    2. Note the logged-in role.
+    3. Take a screenshot of the error.
+    4. Share the error message with the system Developer.
+    """
 )
 
 
 st.caption(
-    f"{APP_NAME} | Version {APP_VERSION}"
+    "Coordinator Monitoring & Task Management System"
 )
