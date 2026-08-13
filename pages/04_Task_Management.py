@@ -1,16 +1,17 @@
-# pages/04_Task_Management.py
-
 import streamlit as st
+from datetime import date
 
-from core.navigation import require_login
-from services.task_service import TaskService
+from config.config import (
+    ROLE_DEVELOPER,
+    ROLE_ADMIN,
+    ROLE_COORDINATOR,
+    COORDINATOR_MASTER,
+    TASK_MASTER,
+)
+
+from utils.google_sheet import read_all
 from services.task_assignment_service import TaskAssignmentService
-from services.coordinator_service import CoordinatorService
 
-
-# ==========================================================
-# PAGE CONFIGURATION
-# ==========================================================
 
 st.set_page_config(
     page_title="Task Management",
@@ -18,364 +19,321 @@ st.set_page_config(
     layout="wide"
 )
 
-require_login(["Developer", "Admin"])
 
+# ============================================================
+# SESSION CHECK
+# ============================================================
 
-# ==========================================================
-# SESSION
-# ==========================================================
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.error("Please login first.")
+    st.stop()
 
-current_username = str(
-    st.session_state.get(
-        "username",
-        "SYSTEM"
-    )
-).strip()
+current_user = st.session_state.get("user", {})
 
 current_role = str(
-    st.session_state.get(
-        "role",
-        ""
-    )
+    current_user.get("Role", "")
+).strip()
+
+current_user_id = str(
+    current_user.get("User_ID", "")
 ).strip()
 
 
-# ==========================================================
+# ============================================================
 # HEADER
-# ==========================================================
+# ============================================================
 
 st.title("📋 Task Management")
 
 st.caption(
-    f"User: {current_username} | Role: {current_role}"
+    f"User: {current_user.get('Username', '')} | "
+    f"Role: {current_role}"
 )
 
 st.divider()
 
 
-# ==========================================================
+# ============================================================
 # LOAD DATA
-# ==========================================================
+# ============================================================
 
 try:
-    tasks = TaskService.get_all_tasks()
-except Exception:
-    tasks = []
-
-if tasks is None:
-    tasks = []
-
-
-try:
-    coordinators = CoordinatorService.get_all_coordinators()
+    coordinators = read_all(COORDINATOR_MASTER)
 except Exception:
     coordinators = []
 
-if coordinators is None:
-    coordinators = []
+try:
+    tasks = read_all(TASK_MASTER)
+except Exception:
+    tasks = []
+
+try:
+    assignments = TaskAssignmentService.get_all_assignments()
+except Exception:
+    assignments = []
 
 
-# ==========================================================
-# NORMALIZE DATA
-# ==========================================================
+# ============================================================
+# NORMALIZE ACTIVE COORDINATORS
+# ============================================================
 
-def get_value(record, *keys):
+active_coordinators = []
 
-    for key in keys:
+for coordinator in coordinators:
 
-        value = record.get(key, "")
-
-        if value is not None and str(value).strip():
-
-            return value
-
-    return ""
-
-
-# ==========================================================
-# DASHBOARD COUNTS
-# ==========================================================
-
-total_tasks = len(tasks)
-
-active_tasks = sum(
-    1
-    for task in tasks
-    if str(
-        get_value(
-            task,
-            "Status",
-            "Task_Status"
-        )
+    status = str(
+        coordinator.get("Status", "ACTIVE")
     ).strip().upper()
-    == "ACTIVE"
+
+    if status != "ACTIVE":
+        continue
+
+    active_coordinators.append(coordinator)
+
+
+# ============================================================
+# NORMALIZE ACTIVE TASKS
+# ============================================================
+
+active_tasks = []
+
+for task in tasks:
+
+    status = str(
+        task.get("Status", "ACTIVE")
+    ).strip().upper()
+
+    if status != "ACTIVE":
+        continue
+
+    active_tasks.append(task)
+
+
+# ============================================================
+# ACCESS CONTROL
+# ============================================================
+
+if current_role not in [
+    ROLE_DEVELOPER,
+    ROLE_ADMIN,
+    ROLE_COORDINATOR
+]:
+
+    st.error("You do not have permission to access Task Management.")
+    st.stop()
+
+
+# ============================================================
+# SUMMARY
+# ============================================================
+
+col1, col2, col3, col4 = st.columns(4)
+
+with col1:
+    st.metric(
+        "Total Tasks",
+        len(active_tasks)
+    )
+
+with col2:
+    st.metric(
+        "Active Coordinators",
+        len(active_coordinators)
+    )
+
+with col3:
+    st.metric(
+        "Total Assignments",
+        len(assignments)
+    )
+
+pending_count = sum(
+    1
+    for x in assignments
+    if str(
+        x.get("Status", "")
+    ).strip().upper() == "PENDING"
 )
 
-inactive_tasks = sum(
-    1
-    for task in tasks
-    if str(
-        get_value(
-            task,
-            "Status",
-            "Task_Status"
-        )
-    ).strip().upper()
-    in [
-        "INACTIVE",
-        "DISABLED"
-    ]
-)
-
-
-# ==========================================================
-# DASHBOARD CARDS
-# ==========================================================
-
-c1, c2, c3 = st.columns(3)
-
-with c1:
-
+with col4:
     st.metric(
-        "📋 Total Tasks",
-        total_tasks
+        "Pending Assignments",
+        pending_count
     )
 
-with c2:
-
-    st.metric(
-        "🟢 Active Tasks",
-        active_tasks
-    )
-
-with c3:
-
-    st.metric(
-        "🔴 Inactive Tasks",
-        inactive_tasks
-    )
 
 st.divider()
 
 
-# ==========================================================
-# TABS
-# ==========================================================
+# ============================================================
+# DEVELOPER / ADMIN ASSIGNMENT SECTION
+# ============================================================
 
-tab1, tab2, tab3 = st.tabs(
-    [
-        "📋 Task List",
-        "➕ Create Task",
-        "👥 Assign Tasks"
-    ]
-)
+if current_role in [
+    ROLE_DEVELOPER,
+    ROLE_ADMIN
+]:
 
+    st.subheader("➕ Assign Task")
 
-# ==========================================================
-# TAB 1 — TASK LIST
-# ==========================================================
+    if not active_coordinators:
 
-with tab1:
+        st.warning("No active coordinators found.")
 
-    st.subheader("📋 All Tasks")
+    elif not active_tasks:
 
-    if not tasks:
-
-        st.info(
-            "No tasks found."
-        )
+        st.warning("No active tasks found.")
 
     else:
 
-        search = st.text_input(
-            "🔍 Search Task",
-            key="task_search"
+        coordinator_options = {}
+
+        for coordinator in active_coordinators:
+
+            coordinator_id = str(
+                coordinator.get(
+                    "Coordinator_ID",
+                    coordinator.get("User_ID", "")
+                )
+            ).strip()
+
+            coordinator_name = str(
+                coordinator.get(
+                    "Coordinator_Name",
+                    coordinator.get(
+                        "Full_Name",
+                        coordinator.get(
+                            "Username",
+                            coordinator_id
+                        )
+                    )
+                )
+            ).strip()
+
+            if coordinator_id:
+                coordinator_options[
+                    f"{coordinator_name} ({coordinator_id})"
+                ] = coordinator_id
+
+
+        task_options = {}
+
+        for task in active_tasks:
+
+            task_id = str(
+                task.get("Task_ID", "")
+            ).strip()
+
+            task_name = str(
+                task.get(
+                    "Task_Name",
+                    task.get(
+                        "Task",
+                        task_id
+                    )
+                )
+            ).strip()
+
+            if task_id:
+
+                task_options[
+                    f"{task_name} ({task_id})"
+                ] = task_id
+
+
+        selected_coordinator_label = st.selectbox(
+            "Select Coordinator",
+            list(coordinator_options.keys()),
+            key="task_management_coordinator"
         )
 
-        status_filter = st.selectbox(
-            "Status",
-            [
-                "All",
-                "ACTIVE",
-                "INACTIVE",
-                "DISABLED"
-            ],
-            key="task_status_filter"
+        selected_task_label = st.selectbox(
+            "Select Task",
+            list(task_options.keys()),
+            key="task_management_task"
         )
 
-        filtered_tasks = tasks
+        col1, col2, col3 = st.columns(3)
 
-        if search.strip():
+        with col1:
 
-            search_text = (
-                search
-                .strip()
-                .lower()
+            assigned_date = st.date_input(
+                "Assigned Date",
+                value=date.today(),
+                key="assigned_date"
             )
 
-            filtered_tasks = [
+        with col2:
 
-                task
+            due_date = st.date_input(
+                "Due Date",
+                value=date.today(),
+                key="due_date"
+            )
 
-                for task in filtered_tasks
+        with col3:
 
-                if (
+            priority = st.selectbox(
+                "Priority",
+                [
+                    "Low",
+                    "Medium",
+                    "High",
+                    "Urgent"
+                ],
+                index=1,
+                key="task_priority"
+            )
 
-                    search_text
-                    in str(
-                        get_value(
-                            task,
-                            "Task_ID",
-                            "Task_Id",
-                            "ID"
-                        )
-                    ).lower()
+        remarks = st.text_area(
+            "Remarks",
+            key="task_assignment_remarks"
+        )
 
-                    or
-
-                    search_text
-                    in str(
-                        get_value(
-                            task,
-                            "Task_Name",
-                            "Task",
-                            "Name"
-                        )
-                    ).lower()
-
-                    or
-
-                    search_text
-                    in str(
-                        get_value(
-                            task,
-                            "Description"
-                        )
-                    ).lower()
-
-                )
-            ]
-
-        if status_filter != "All":
-
-            filtered_tasks = [
-
-                task
-
-                for task in filtered_tasks
-
-                if str(
-                    get_value(
-                        task,
-                        "Status",
-                        "Task_Status"
-                    )
-                ).strip().upper()
-                == status_filter
-
-            ]
-
-        st.dataframe(
-            filtered_tasks,
+        if st.button(
+            "➕ Assign Task",
+            type="primary",
             use_container_width=True,
-            hide_index=True
-        )
+            key="assign_task_button"
+        ):
 
-        st.caption(
-            f"Showing {len(filtered_tasks)} "
-            f"of {len(tasks)} tasks"
-        )
+            selected_coordinator_id = coordinator_options[
+                selected_coordinator_label
+            ]
 
+            selected_task_id = task_options[
+                selected_task_label
+            ]
 
-# ==========================================================
-# TAB 2 — CREATE TASK
-# ==========================================================
+            if due_date < assigned_date:
 
-with tab2:
-
-    st.subheader("➕ Create New Task")
-
-    task_name = st.text_input(
-        "Task Name",
-        key="create_task_name"
-    )
-
-    description = st.text_area(
-        "Task Description",
-        key="create_task_description"
-    )
-
-    frequency = st.selectbox(
-        "Frequency",
-        [
-            "Daily",
-            "Weekly",
-            "Monthly",
-            "One Time"
-        ],
-        key="create_task_frequency"
-    )
-
-    priority = st.selectbox(
-        "Priority",
-        [
-            "High",
-            "Medium",
-            "Low"
-        ],
-        key="create_task_priority"
-    )
-
-    task_status = st.selectbox(
-        "Status",
-        [
-            "ACTIVE",
-            "INACTIVE"
-        ],
-        key="create_task_status"
-    )
-
-    if st.button(
-        "✅ Create Task",
-        use_container_width=True,
-        key="create_task_button"
-    ):
-
-        if not task_name.strip():
-
-            st.error(
-                "Task Name is required."
-            )
-
-        else:
-
-            try:
-
-                result = TaskService.create_task(
-                    task_name=task_name.strip(),
-                    description=description.strip(),
-                    frequency=frequency,
-                    priority=priority,
-                    status=task_status,
-                    created_by=current_username
+                st.error(
+                    "Due Date cannot be earlier than Assigned Date."
                 )
 
-                if isinstance(result, tuple):
+            else:
 
-                    ok, message = result
-
-                else:
-
-                    ok = bool(result)
-                    message = (
-                        "Task created successfully."
-                        if ok
-                        else "Unable to create task."
+                success, message = (
+                    TaskAssignmentService.assign_task(
+                        coordinator_id=selected_coordinator_id,
+                        task_id=selected_task_id,
+                        assigned_by=current_user_id,
+                        assigned_date=assigned_date.strftime(
+                            "%d-%m-%Y"
+                        ),
+                        due_date=due_date.strftime(
+                            "%d-%m-%Y"
+                        ),
+                        priority=priority,
+                        remarks=remarks
                     )
+                )
 
-                if ok:
+                if success:
 
                     st.success(message)
+
+                    st.cache_data.clear()
 
                     st.rerun()
 
@@ -383,582 +341,311 @@ with tab2:
 
                     st.error(message)
 
-            except TypeError:
 
-                try:
-
-                    result = TaskService.create_task(
-                        task_name.strip(),
-                        description.strip(),
-                        frequency,
-                        priority,
-                        task_status,
-                        current_username
-                    )
-
-                    if isinstance(result, tuple):
-
-                        ok, message = result
-
-                    else:
-
-                        ok = bool(result)
-                        message = (
-                            "Task created successfully."
-                            if ok
-                            else "Unable to create task."
-                        )
-
-                    if ok:
-
-                        st.success(message)
-
-                        st.rerun()
-
-                    else:
-
-                        st.error(message)
-
-                except Exception as e:
-
-                    st.error(
-                        f"Unable to create task: {e}"
-                    )
-
-            except Exception as e:
-
-                st.error(
-                    f"Unable to create task: {e}"
-                )
+    st.divider()
 
 
-# ==========================================================
-# TAB 3 — ASSIGN TASKS
-# ==========================================================
+# ============================================================
+# COORDINATOR VIEW
+# ============================================================
 
-with tab3:
+if current_role == ROLE_COORDINATOR:
 
-    st.subheader(
-        "👥 Assign Tasks to Coordinators"
+    st.subheader("📌 My Assigned Tasks")
+
+    my_assignments = (
+        TaskAssignmentService.coordinator_tasks(
+            current_user_id
+        )
     )
 
-    if not tasks:
+    if not my_assignments:
 
-        st.warning(
-            "No tasks available for assignment."
-        )
-
-    elif not coordinators:
-
-        st.warning(
-            "No coordinators found."
+        st.info(
+            "No tasks have been assigned to you."
         )
 
     else:
 
-        # --------------------------------------------------
-        # COORDINATOR SELECTION
-        # --------------------------------------------------
+        for index, assignment in enumerate(
+            my_assignments
+        ):
 
-        coordinator_labels = []
-
-        for coordinator in coordinators:
-
-            coordinator_id = get_value(
-                coordinator,
-                "Coordinator_ID",
-                "Coordinator_Id",
-                "User_ID",
-                "Username",
-                "ID"
-            )
-
-            coordinator_name = get_value(
-                coordinator,
-                "Full_Name",
-                "Coordinator_Name",
-                "Name",
-                "Username"
-            )
-
-            if coordinator_id:
-
-                if coordinator_name:
-
-                    coordinator_labels.append(
-                        (
-                            coordinator_id,
-                            f"{coordinator_name} "
-                            f"({coordinator_id})"
-                        )
-                    )
-
-                else:
-
-                    coordinator_labels.append(
-                        (
-                            coordinator_id,
-                            str(coordinator_id)
-                        )
-                    )
-
-        if not coordinator_labels:
-
-            st.warning(
-                "No valid coordinators found."
-            )
-
-        else:
-
-            coordinator_ids = [
-                item[0]
-                for item in coordinator_labels
-            ]
-
-            coordinator_display = {
-                item[0]: item[1]
-                for item in coordinator_labels
-            }
-
-            selected_coordinator = st.selectbox(
-
-                "Select Coordinator",
-
-                coordinator_ids,
-
-                format_func=lambda x:
-                coordinator_display.get(
-                    x,
-                    str(x)
-                ),
-
-                key="selected_coordinator"
-
-            )
-
-            st.divider()
-
-            # --------------------------------------------------
-            # TASK SELECTION
-            # --------------------------------------------------
-
-            task_labels = []
-
-            for task in tasks:
-
-                task_id = get_value(
-                    task,
+            task_id = str(
+                assignment.get(
                     "Task_ID",
-                    "Task_Id",
-                    "ID"
+                    ""
                 )
+            ).strip()
 
-                task_name_value = get_value(
-                    task,
-                    "Task_Name",
-                    "Task",
-                    "Name"
-                )
+            task_name = task_id
 
-                task_status_value = str(
-                    get_value(
-                        task,
-                        "Status",
-                        "Task_Status"
-                    )
-                ).strip().upper()
+            for task in active_tasks:
 
-                if (
-                    task_id
-                    and task_status_value
-                    not in [
-                        "INACTIVE",
-                        "DISABLED",
-                        "DELETED"
-                    ]
-                ):
+                if str(
+                    task.get("Task_ID", "")
+                ).strip() == task_id:
 
-                    label = (
-                        f"{task_name_value} "
-                        f"({task_id})"
-                    )
-
-                    task_labels.append(
-                        (
-                            task_id,
-                            label
-                        )
-                    )
-
-            if not task_labels:
-
-                st.warning(
-                    "No active tasks available."
-                )
-
-            else:
-
-                task_ids = [
-                    item[0]
-                    for item in task_labels
-                ]
-
-                task_display = {
-                    item[0]: item[1]
-                    for item in task_labels
-                }
-
-                selected_tasks = st.multiselect(
-
-                    "Select Task(s)",
-
-                    task_ids,
-
-                    format_func=lambda x:
-                    task_display.get(
-                        x,
-                        str(x)
-                    ),
-
-                    key="selected_tasks"
-
-                )
-
-                st.divider()
-
-                if st.button(
-                    "➕ Assign Selected Task(s)",
-                    use_container_width=True,
-                    key="assign_tasks_button"
-                ):
-
-                    if not selected_tasks:
-
-                        st.warning(
-                            "Please select at least one task."
-                        )
-
-                    else:
-
-                        success_count = 0
-                        error_messages = []
-
-                        for task_id in selected_tasks:
-
-                            try:
-
-                                result = (
-                                    TaskAssignmentService
-                                    .assign_task(
-                                        coordinator_id=selected_coordinator,
-                                        task_id=task_id,
-                                        assigned_by=current_username
-                                    )
-                                )
-
-                                if isinstance(
-                                    result,
-                                    tuple
-                                ):
-
-                                    ok, message = result
-
-                                else:
-
-                                    ok = bool(result)
-                                    message = (
-                                        "Task assigned."
-                                        if ok
-                                        else "Assignment failed."
-                                    )
-
-                                if ok:
-
-                                    success_count += 1
-
-                                else:
-
-                                    error_messages.append(
-                                        str(message)
-                                    )
-
-                            except TypeError:
-
-                                try:
-
-                                    result = (
-                                        TaskAssignmentService
-                                        .assign_task(
-                                            selected_coordinator,
-                                            task_id,
-                                            current_username
-                                        )
-                                    )
-
-                                    if isinstance(
-                                        result,
-                                        tuple
-                                    ):
-
-                                        ok, message = result
-
-                                    else:
-
-                                        ok = bool(result)
-                                        message = (
-                                            "Task assigned."
-                                            if ok
-                                            else "Assignment failed."
-                                        )
-
-                                    if ok:
-
-                                        success_count += 1
-
-                                    else:
-
-                                        error_messages.append(
-                                            str(message)
-                                        )
-
-                                except Exception as e:
-
-                                    error_messages.append(
-                                        str(e)
-                                    )
-
-                            except Exception as e:
-
-                                error_messages.append(
-                                    str(e)
-                                )
-
-                        if success_count > 0:
-
-                            st.success(
-                                f"✅ {success_count} "
-                                f"task(s) assigned successfully."
-                            )
-
-                        for message in error_messages:
-
-                            st.warning(message)
-
-                        if success_count > 0:
-
-                            st.rerun()
-
-            # --------------------------------------------------
-            # CURRENT ASSIGNMENTS
-            # --------------------------------------------------
-
-            st.divider()
-
-            st.subheader(
-                "📌 Current Assignments"
-            )
-
-            try:
-
-                assignments = (
-                    TaskAssignmentService
-                    .get_coordinator_tasks(
-                        selected_coordinator
-                    )
-                )
-
-            except Exception:
-
-                assignments = []
-
-            if assignments is None:
-
-                assignments = []
-
-            if not assignments:
-
-                st.info(
-                    "No tasks currently assigned "
-                    "to this coordinator."
-                )
-
-            else:
-
-                assignment_rows = []
-
-                for assignment in assignments:
-
-                    assignment_rows.append(
-                        assignment
-                    )
-
-                st.dataframe(
-                    assignment_rows,
-                    use_container_width=True,
-                    hide_index=True
-                )
-
-                st.divider()
-
-                st.subheader(
-                    "🗑 Remove Task Assignment"
-                )
-
-                assignment_options = []
-
-                for assignment in assignments:
-
-                    assignment_task_id = get_value(
-                        assignment,
-                        "Task_ID",
-                        "Task_Id",
-                        "ID"
-                    )
-
-                    assignment_task_name = get_value(
-                        assignment,
-                        "Task_Name",
-                        "Task",
-                        "Name"
-                    )
-
-                    if assignment_task_id:
-
-                        assignment_options.append(
-                            (
-                                assignment_task_id,
-                                f"{assignment_task_name} "
-                                f"({assignment_task_id})"
+                    task_name = str(
+                        task.get(
+                            "Task_Name",
+                            task.get(
+                                "Task",
+                                task_id
                             )
                         )
-
-                if assignment_options:
-
-                    remove_task_id = st.selectbox(
-
-                        "Select Assigned Task",
-
-                        [
-                            item[0]
-                            for item in assignment_options
-                        ],
-
-                        format_func=lambda x: next(
-                            (
-                                item[1]
-                                for item
-                                in assignment_options
-                                if item[0] == x
-                            ),
-                            str(x)
-                        ),
-
-                        key="remove_task_id"
-
                     )
+
+                    break
+
+
+            status = str(
+                assignment.get(
+                    "Status",
+                    "Pending"
+                )
+            ).strip()
+
+            priority = str(
+                assignment.get(
+                    "Priority",
+                    "Medium"
+                )
+            ).strip()
+
+            due_date = str(
+                assignment.get(
+                    "Due_Date",
+                    ""
+                )
+            ).strip()
+
+            assignment_id = str(
+                assignment.get(
+                    "Assignment_ID",
+                    ""
+                )
+            ).strip()
+
+
+            with st.container(
+                border=True
+            ):
+
+                col1, col2, col3 = st.columns(
+                    [4, 2, 2]
+                )
+
+                with col1:
+
+                    st.markdown(
+                        f"### 📋 {task_name}"
+                    )
+
+                    st.caption(
+                        f"Assignment ID: {assignment_id}"
+                    )
+
+                with col2:
+
+                    st.write(
+                        f"**Priority:** {priority}"
+                    )
+
+                with col3:
+
+                    st.write(
+                        f"**Due Date:** {due_date}"
+                    )
+
+                st.write(
+                    f"**Current Status:** {status}"
+                )
+
+                if status.upper() != "COMPLETED":
 
                     if st.button(
-                        "🗑 Remove Assignment",
-                        use_container_width=True,
-                        key="remove_assignment_button"
+                        "✅ Submit / Mark Completed",
+                        key=f"complete_task_{assignment_id}_{index}",
+                        use_container_width=True
                     ):
 
-                        try:
+                        # Find the actual Google Sheet row.
+                        all_assignments = (
+                            TaskAssignmentService
+                            .get_all_assignments()
+                        )
 
-                            result = (
+                        target_row = None
+
+                        for row_number, item in enumerate(
+                            all_assignments,
+                            start=2
+                        ):
+
+                            if str(
+                                item.get(
+                                    "Assignment_ID",
+                                    ""
+                                )
+                            ).strip() == assignment_id:
+
+                                target_row = row_number
+                                break
+
+                        if target_row is None:
+
+                            st.error(
+                                "Assignment could not be found."
+                            )
+
+                        else:
+
+                            success = (
                                 TaskAssignmentService
-                                .remove_assignment(
-                                    coordinator_id=selected_coordinator,
-                                    task_id=remove_task_id,
-                                    modified_by=current_username
+                                .update_status(
+                                    target_row,
+                                    "Completed"
                                 )
                             )
 
-                            if isinstance(
-                                result,
-                                tuple
-                            ):
+                            if success:
 
-                                ok, message = result
-
-                            else:
-
-                                ok = bool(result)
-                                message = (
-                                    "Assignment removed."
-                                    if ok
-                                    else "Unable to remove assignment."
+                                st.success(
+                                    "Task submitted successfully."
                                 )
 
-                            if ok:
-
-                                st.success(message)
+                                st.cache_data.clear()
 
                                 st.rerun()
 
-                            else:
 
-                                st.error(message)
+# ============================================================
+# ADMIN / DEVELOPER ASSIGNMENT MONITOR
+# ============================================================
 
-                        except TypeError:
+if current_role in [
+    ROLE_DEVELOPER,
+    ROLE_ADMIN
+]:
 
-                            try:
+    st.subheader("📊 Assignment Monitoring")
 
-                                result = (
-                                    TaskAssignmentService
-                                    .remove_assignment(
-                                        selected_coordinator,
-                                        remove_task_id,
-                                        current_username
-                                    )
-                                )
+    if not assignments:
 
-                                if isinstance(
-                                    result,
-                                    tuple
-                                ):
+        st.info(
+            "No task assignments available."
+        )
 
-                                    ok, message = result
+    else:
 
-                                else:
+        display_rows = []
 
-                                    ok = bool(result)
-                                    message = (
-                                        "Assignment removed."
-                                        if ok
-                                        else "Unable to remove assignment."
-                                    )
+        for assignment in assignments:
 
-                                if ok:
+            coordinator_id = str(
+                assignment.get(
+                    "Coordinator_ID",
+                    ""
+                )
+            ).strip()
 
-                                    st.success(message)
+            task_id = str(
+                assignment.get(
+                    "Task_ID",
+                    ""
+                )
+            ).strip()
 
-                                    st.rerun()
+            coordinator_name = coordinator_id
 
-                                else:
+            for coordinator in active_coordinators:
 
-                                    st.error(message)
+                cid = str(
+                    coordinator.get(
+                        "Coordinator_ID",
+                        coordinator.get(
+                            "User_ID",
+                            ""
+                        )
+                    )
+                ).strip()
 
-                            except Exception as e:
+                if cid == coordinator_id:
 
-                                st.error(
-                                    f"Unable to remove assignment: {e}"
-                                )
-
-                        except Exception as e:
-
-                            st.error(
-                                f"Unable to remove assignment: {e}"
+                    coordinator_name = str(
+                        coordinator.get(
+                            "Coordinator_Name",
+                            coordinator.get(
+                                "Full_Name",
+                                coordinator_id
                             )
+                        )
+                    )
+
+                    break
 
 
-# ==========================================================
-# FOOTER
-# ==========================================================
+            task_name = task_id
 
-st.divider()
+            for task in active_tasks:
 
-st.caption(
-    "MSU / EPID Health Coordinator Monitoring System "
-    "| Task Management"
-)
+                tid = str(
+                    task.get(
+                        "Task_ID",
+                        ""
+                    )
+                ).strip()
+
+                if tid == task_id:
+
+                    task_name = str(
+                        task.get(
+                            "Task_Name",
+                            task.get(
+                                "Task",
+                                task_id
+                            )
+                        )
+                    )
+
+                    break
+
+
+            display_rows.append(
+                {
+                    "Assignment ID": assignment.get(
+                        "Assignment_ID",
+                        ""
+                    ),
+                    "Coordinator": coordinator_name,
+                    "Task": task_name,
+                    "Assigned Date": assignment.get(
+                        "Assigned_Date",
+                        ""
+                    ),
+                    "Due Date": assignment.get(
+                        "Due_Date",
+                        ""
+                    ),
+                    "Priority": assignment.get(
+                        "Priority",
+                        ""
+                    ),
+                    "Status": assignment.get(
+                        "Status",
+                        ""
+                    ),
+                    "Remarks": assignment.get(
+                        "Remarks",
+                        ""
+                    )
+                }
+            )
+
+
+        st.dataframe(
+            display_rows,
+            use_container_width=True,
+            hide_index=True
+        )
