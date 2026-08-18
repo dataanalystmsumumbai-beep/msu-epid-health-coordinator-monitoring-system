@@ -36,10 +36,6 @@ def normalize_role(role):
 # ==========================================================
 
 def require_login(required_role=None):
-    """
-    Protect application pages from unauthorized access.
-    Supports a single role or a list of allowed roles.
-    """
 
     if not st.session_state.get(
         "logged_in",
@@ -61,22 +57,12 @@ def require_login(required_role=None):
     )
 
 
-    # Keep normalized role in session
     st.session_state["role"] = current_role
 
 
-    # ------------------------------------------------------
-    # No specific role restriction
-    # ------------------------------------------------------
-
     if required_role is None:
-
         return
 
-
-    # ------------------------------------------------------
-    # Multiple allowed roles
-    # ------------------------------------------------------
 
     if isinstance(
         required_role,
@@ -108,10 +94,6 @@ def require_login(required_role=None):
         return
 
 
-    # ------------------------------------------------------
-    # Single allowed role
-    # ------------------------------------------------------
-
     required_role = normalize_role(
         required_role
     )
@@ -128,6 +110,73 @@ def require_login(required_role=None):
         )
 
         st.stop()
+
+
+# ==========================================================
+# LOGOUT BUTTON
+# ==========================================================
+
+def logout_button():
+
+    with st.sidebar:
+
+        st.divider()
+
+        st.markdown(
+            "### 👤 Current User"
+        )
+
+        full_name = str(
+            st.session_state.get(
+                "full_name",
+                ""
+            )
+        ).strip()
+
+        username = str(
+            st.session_state.get(
+                "username",
+                ""
+            )
+        ).strip()
+
+        role = normalize_role(
+            st.session_state.get(
+                "role",
+                ""
+            )
+        )
+
+
+        if full_name:
+
+            st.write(
+                f"**{full_name}**"
+            )
+
+        elif username:
+
+            st.write(
+                f"**{username}**"
+            )
+
+
+        if role:
+
+            st.caption(
+                f"Role: {role}"
+            )
+
+
+        if st.button(
+            "🚪 Logout",
+            use_container_width=True,
+            key="global_logout_button"
+        ):
+
+            st.session_state.clear()
+
+            st.rerun()
 
 
 # ==========================================================
