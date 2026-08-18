@@ -1,28 +1,70 @@
-from config.config import (
-    USER_MASTER,
-    MAX_LOGIN_ATTEMPTS
-)
+from datetime import datetime
 
-from utils.google_sheet import (
-    read_all,
-    update_value
-)
+from config.config import USERS
 
-from utils.security import (
-    verify_password
-)
+from utils.google_sheet import read_all
 
-from utils.logger import (
-    save_login_history,
-    save_audit
-)
+from utils.security import verify_password
+
+from services.audit_service import save_audit
 
 
 class AuthService:
 
-    # ======================================================
+    # ==========================================================
+    # GET ALL USERS
+    # ==========================================================
+
+    @staticmethod
+    def get_all_users():
+
+        try:
+
+            data = read_all(
+                USERS
+            )
+
+            return data if data else []
+
+        except Exception:
+
+            return []
+
+
+    # ==========================================================
+    # NORMALIZE ROLE
+    # ==========================================================
+
+    @staticmethod
+    def normalize_role(role):
+
+        role = str(
+            role or ""
+        ).strip().lower()
+
+
+        role_map = {
+
+            "developer": "Developer",
+
+            "admin": "Admin",
+
+            "administrator": "Admin",
+
+            "coordinator": "Coordinator"
+
+        }
+
+
+        return role_map.get(
+            role,
+            ""
+        )
+
+
+    # ==========================================================
     # AUTHENTICATE
-    # ======================================================
+    # ==========================================================
 
     @staticmethod
     def authenticate(
@@ -32,7 +74,7 @@ class AuthService:
 
         username = str(
             username or ""
-        ).strip().lower()
+        ).strip()
 
         password = str(
             password or ""
@@ -47,43 +89,29 @@ class AuthService:
             )
 
 
-        try:
-
-            users = (
-                read_all(
-                    USER_MASTER
-                )
-                or []
-            )
-
-        except Exception as e:
-
-            return (
-                False,
-                f"Unable to read User Master: {e}"
-            )
+        users = (
+            AuthService
+            .get_all_users()
+        )
 
 
-        for row_no, user in enumerate(
-            users,
-            start=2
-        ):
+        for user in users:
 
-            db_username = str(
+            sheet_username = str(
                 user.get(
                     "Username",
                     ""
                 )
-            ).strip().lower()
+            ).strip()
 
 
-            if db_username != username:
+            if (
+                sheet_username.lower()
+                != username.lower()
+            ):
+
                 continue
 
-
-            # ==================================================
-            # ACCOUNT STATUS
-            # ==================================================
 
             status = str(
                 user.get(
@@ -93,179 +121,122 @@ class AuthService:
             ).strip().upper()
 
 
-            if status != "ACTIVE":
+            if status not in [
+                "ACTIVE",
+                "ACTIVATED"
+            ]:
 
                 return (
                     False,
-                    "Account Disabled"
+                    "Your account is inactive."
                 )
 
-
-            # ==================================================
-            # ACCOUNT LOCK
-            # ==================================================
-
-            locked = str(
-                user.get(
-                    "Account_Locked",
-                    "NO"
-                )
-            ).strip().upper()
-
-
-            if locked == "YES":
-
-                return (
-                    False,
-                    "Account Locked. Contact an authorised administrator."
-                )
-
-
-            # ==================================================
-            # PASSWORD
-            # ==================================================
 
             password_hash = str(
                 user.get(
                     "Password_Hash",
+                    user.get(
+                        "Password",
+                        ""
+                    )
+                )
+            ).strip()
+
+
+            if not verify_password(
+                password,
+                password_hash
+            ):
+
+                return (
+                    False,
+                    "Invalid Username or Password."
+                )
+
+
+            # --------------------------------------------------
+            # NORMALIZE ROLE
+            # --------------------------------------------------
+
+            role = (
+                AuthService
+                .normalize_role(
+                    user.get(
+                        "Role",
+                        ""
+                    )
+                )
+            )
+
+
+            if not role:
+
+                return (
+                    False,
+                    "Invalid User Role."
+                )
+
+
+            user["Role"] = role
+
+
+            # --------------------------------------------------
+            # NORMALIZE USER VALUES
+            # --------------------------------------------------
+
+            user["Username"] = str(
+                user.get(
+                    "Username",
                     ""
                 )
             ).strip()
 
 
-            if not password_hash:
-
-                return (
-                    False,
-                    "Password is not configured for this account."
-                )
-
-
-            try:
-
-                valid_password = verify_password(
-                    password,
-                    password_hash
-                )
-
-            except Exception:
-
-                valid_password = False
-
-
-            # ==================================================
-            # INVALID PASSWORD
-            # ==================================================
-
-            if not valid_password:
-
-                try:
-
-                    attempts = int(
-                        user.get(
-                            "Login_Attempts",
-                            0
-                        )
+            user["Full_Name"] = str(
+                user.get(
+                    "Full_Name",
+                    user.get(
+                        "Name",
+                        ""
                     )
-
-                except Exception:
-
-                    attempts = 0
-
-
-                attempts += 1
-
-
-                update_value(
-                    USER_MASTER,
-                    row_no,
-                    12,
-                    attempts
                 )
+            ).strip()
 
 
-                if attempts >= MAX_LOGIN_ATTEMPTS:
-
-                    update_value(
-                        USER_MASTER,
-                        row_no,
-                        13,
-                        "YES"
-                    )
-
-
-                    try:
-
-                        save_audit(
-                            user,
-                            "ACCOUNT_LOCKED"
-                        )
-
-                    except Exception:
-                        pass
-
-
-                    return (
-                        False,
-                        "Account Locked"
-                    )
-
-
-                remaining = (
-                    MAX_LOGIN_ATTEMPTS
-                    - attempts
+            user["User_ID"] = str(
+                user.get(
+                    "User_ID",
+                    ""
                 )
+            ).strip()
 
 
-                return (
-                    False,
-                    f"Invalid Password. "
-                    f"{remaining} attempt(s) remaining."
+            # --------------------------------------------------
+            # LOGIN TIMESTAMP
+            # --------------------------------------------------
+
+            user["Last_Login"] = (
+                datetime.now()
+                .strftime(
+                    "%d-%m-%Y %H:%M:%S"
                 )
-
-
-            # ==================================================
-            # SUCCESS
-            # ==================================================
-
-            update_value(
-                USER_MASTER,
-                row_no,
-                12,
-                0
             )
 
 
-            update_value(
-                USER_MASTER,
-                row_no,
-                11,
-                "YES"
-            )
-
-
-            # ==================================================
-            # AUDIT / LOGIN HISTORY
-            # ==================================================
-
-            try:
-
-                save_login_history(
-                    user
-                )
-
-            except Exception:
-                pass
-
+            # --------------------------------------------------
+            # AUDIT
+            # --------------------------------------------------
 
             try:
 
                 save_audit(
                     user,
-                    "LOGIN"
+                    "LOGIN",
+                    "Successful login"
                 )
 
             except Exception:
+
                 pass
 
 
@@ -275,36 +246,7 @@ class AuthService:
             )
 
 
-        # ======================================================
-        # USER NOT FOUND
-        # ======================================================
-
         return (
             False,
-            "User Not Found"
+            "Invalid Username or Password."
         )
-
-
-    # ======================================================
-    # LOGOUT
-    # ======================================================
-
-    @staticmethod
-    def logout(user):
-
-        if not user:
-            return False
-
-
-        try:
-
-            save_audit(
-                user,
-                "LOGOUT"
-            )
-
-        except Exception:
-            pass
-
-
-        return True
