@@ -6,7 +6,7 @@ from utils.google_sheet import read_all
 
 from utils.security import verify_password
 
-from services.audit_service import save_audit
+from utils.logger import save_audit
 
 
 class AuthService:
