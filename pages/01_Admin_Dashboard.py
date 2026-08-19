@@ -11,6 +11,8 @@ from config.config import (
 
 from utils.google_sheet import read_all
 
+from core.navigation import logout_button
+
 
 # ==========================================================
 # PAGE CONFIGURATION
@@ -64,6 +66,9 @@ if current_role != ROLE_ADMIN:
     )
 
     st.stop()
+
+
+logout_button()
 
 
 # ==========================================================
