@@ -61,6 +61,8 @@ def require_login(required_role=None):
 
 
     if required_role is None:
+
+        logout_button()
         return
 
 
@@ -91,6 +93,7 @@ def require_login(required_role=None):
             st.stop()
 
 
+        logout_button()
         return
 
 
@@ -110,6 +113,9 @@ def require_login(required_role=None):
         )
 
         st.stop()
+
+
+    logout_button()
 
 
 # ==========================================================
