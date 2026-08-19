@@ -11,6 +11,8 @@ from config.config import (
 
 from utils.google_sheet import read_all
 
+from core.navigation import logout_button
+
 from services.task_assignment_service import (
     TaskAssignmentService
 )
@@ -90,6 +92,9 @@ if current_role != ROLE_COORDINATOR:
     )
 
     st.stop()
+
+
+logout_button()
 
 
 # ==========================================================
