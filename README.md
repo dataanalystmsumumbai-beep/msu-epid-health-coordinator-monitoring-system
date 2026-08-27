@@ -2,107 +2,121 @@
 
 ## Enterprise Edition v3.0
 
-A Streamlit-based monitoring system developed for the Metropolitan Surveillance Unit (MSU), Epidemiology Cell (EPID), Mumbai.
+Developed for:
 
-## Purpose
+**Metropolitan Surveillance Unit (MSU)**  
+**Epidemiology Cell (EPID), Mumbai**
 
-The system provides a centralized application for user authentication, role-based access, coordinator/task management, daily review monitoring, notifications, reports, system information, and support documentation.
+### Status
 
-## Technology Stack
+**Production Ready / Final Submission Version**
 
-- Python
-- Streamlit 1.46.1
-- Google Sheets / Google APIs
-- Pandas
-- OpenPyXL
-- Plotly
-- Google Service Account authentication through Streamlit Secrets
+---
+
+## Overview
+
+The **MSU/EPID Health Coordinator Monitoring System** is a web-based monitoring application developed using **Python and Streamlit**.
+
+The system provides a centralized platform for managing coordinators, tasks, daily reviews, notifications, reports, users, and system information through role-based access.
+
+The application supports **Developer, Admin, and Coordinator** users with appropriate access to system functions.
+
+---
+
+## Key Features
+
+- 🔐 User authentication
+- 👥 Role-based access control
+- 🛠️ Developer Dashboard
+- 👨‍💼 Admin Dashboard
+- 👨‍⚕️ Coordinator Dashboard
+- 📋 Task Management
+- 📌 Task Assignment
+- 📝 Daily Review Management
+- 🔔 Notifications
+- 📊 Reports Dashboard
+- 👤 User Management
+- ⚙️ System Settings
+- 📖 System Manual
+- ❓ Help Center
+- 📡 System Status
+- 📝 Audit and login history support
+- 🚪 Secure logout
+
+---
 
 ## User Roles
 
 ### Developer
-System-level access and developer dashboard functions.
+
+Provides access to developer-level system functions and monitoring.
 
 ### Admin
-Administrative dashboard, user/task management, reviews, notifications, reports and system functions according to configured permissions.
+
+Provides administrative access for managing users, coordinators, tasks, reviews, reports, and other configured system functions.
 
 ### Coordinator
-Coordinator dashboard, assigned task monitoring and daily review functions according to configured permissions.
 
-## Main Application Pages
+Provides access to assigned tasks, daily reviews, notifications, and coordinator-specific monitoring functions.
 
-1. Developer Dashboard
-2. Admin Dashboard
-3. Coordinator Dashboard
-4. Daily Review
-5. Task Management
-6. User Management
-7. Help Center
-8. System Settings
-9. System Manual
-10. Notifications
-11. Reports Dashboard
-12. System Status
-13. About
-14. Contact Support
+---
 
-## Data Structure
+## Technology Stack
 
-The application is configured to use the following Google Sheet worksheets:
+- **Python**
+- **Streamlit**
+- **Pandas**
+- **OpenPyXL**
+- **Plotly**
+- **Google Sheets / Google APIs**
+- **Google Service Account Authentication**
 
-- 01_User_Master
-- 02_Coordinator_Master
-- 03_Task_Master
-- 04_Coordinator_Task_Map
-- 05_Daily_Review
-- 06_Login_History
-- 07_Audit_Log
-- 08_System_Settings
-- 09_App_Manual
-- 10_Notifications
+---
+
+## Data Source
+
+The application is configured to use Google Sheets as its primary data source.
+
+Configured worksheets include:
+
+- `01_User_Master`
+- `02_Coordinator_Master`
+- `03_Task_Master`
+- `04_Coordinator_Task_Map`
+- `05_Daily_Review`
+- `06_Login_History`
+- `07_Audit_Log`
+- `08_System_Settings`
+- `09_App_Manual`
+- `10_Notifications`
+
+---
 
 ## Security
+
+The application implements:
 
 - Role-based page access
 - Password verification
 - Session-based authentication
-- Session logout
-- Role normalization for Developer, Admin and Coordinator
+- Role normalization
+- Logout/session clearing
+- Login history
 - Audit logging support
-- Configurable login-attempt and session-timeout settings
+- Configurable session and login settings
 
-## Deployment
+---
 
-The application is designed for deployment through Streamlit with Google credentials supplied through Streamlit Secrets.
+## Application Structure
 
-Required secret:
-
-`gcp_service_account`
-
-The Google service account must have appropriate access to the configured Google Sheet.
-
-## Local Run
-
-Install dependencies:
-
-```bash
-pip install -r requirements.txt
-```
-
-Run:
-
-```bash
-streamlit run app.py
-```
-
-## Version
-
-Application version: 3.0.0
-
-Environment: Production
-
-Owner: MSU / EPID
-
-## Current Status
-
-Core authentication, role-based access, dashboards, task assignment, daily review, notifications, and logout functionality have been tested in the final working application.
+```text
+MSU-EPID Health Coordinator Monitoring System
+│
+├── app.py
+├── config/
+├── core/
+├── services/
+├── utils/
+├── pages/
+├── requirements.txt
+└── README.md
