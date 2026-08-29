@@ -2,10 +2,18 @@ import streamlit as st
 import pandas as pd
 from datetime import date
 
-from core.navigation import require_login
+from core.navigation import (
+    require_login,
+    logout_button
+)
 
-from services.task_assignment_service import TaskAssignmentService
-from services.task_service import TaskService
+from services.task_assignment_service import (
+    TaskAssignmentService
+)
+
+from services.task_service import (
+    TaskService
+)
 
 from utils.google_sheet import read_all
 
@@ -18,7 +26,7 @@ from config.config import (
 
 
 # ==========================================================
-# PAGE CONFIG
+# PAGE CONFIGURATION
 # ==========================================================
 
 st.set_page_config(
@@ -29,7 +37,7 @@ st.set_page_config(
 
 
 # ==========================================================
-# ACCESS
+# ACCESS CONTROL
 # ==========================================================
 
 require_login([
@@ -40,7 +48,14 @@ require_login([
 
 
 # ==========================================================
-# SESSION
+# LOGOUT
+# ==========================================================
+
+logout_button()
+
+
+# ==========================================================
+# SESSION INFORMATION
 # ==========================================================
 
 current_role = str(
@@ -89,16 +104,19 @@ def value(record, *keys):
 
     for key in keys:
 
-        v = record.get(
+        item = record.get(
             key,
             ""
         )
 
         if (
-            v is not None
-            and str(v).strip() != ""
+            item is not None
+            and str(item).strip() != ""
         ):
-            return str(v).strip()
+
+            return str(
+                item
+            ).strip()
 
     return ""
 
@@ -163,7 +181,7 @@ users = users or []
 
 
 # ==========================================================
-# COORDINATORS
+# ACTIVE COORDINATORS
 # ==========================================================
 
 coordinators = [
@@ -220,7 +238,7 @@ for task in tasks:
 
 
 # ==========================================================
-# ASSIGNMENT COUNTS
+# ACTIVE ASSIGNMENTS
 # ==========================================================
 
 active_assignments = [
@@ -244,6 +262,50 @@ active_assignments = [
 
 ]
 
+
+# ==========================================================
+# TASK STATUS COUNTS
+# ==========================================================
+
+active_tasks = [
+
+    task
+
+    for task in tasks
+
+    if normalize(
+        value(
+            task,
+            "Status"
+        )
+    ).upper()
+
+    == "ACTIVE"
+
+]
+
+
+inactive_tasks = [
+
+    task
+
+    for task in tasks
+
+    if normalize(
+        value(
+            task,
+            "Status"
+        )
+    ).upper()
+
+    == "INACTIVE"
+
+]
+
+
+# ==========================================================
+# ASSIGNMENT COUNTS
+# ==========================================================
 
 total_tasks = len(
     tasks
@@ -299,6 +361,7 @@ with c1:
         total_tasks
     )
 
+
 with c2:
 
     st.metric(
@@ -306,12 +369,14 @@ with c2:
         len(coordinators)
     )
 
+
 with c3:
 
     st.metric(
         "📌 Active Assignments",
         total_assignments
     )
+
 
 with c4:
 
@@ -444,17 +509,18 @@ if current_role == ROLE_COORDINATOR:
 
 else:
 
-    tab1, tab2, tab3 = st.tabs(
+    tab1, tab2, tab3, tab4 = st.tabs(
         [
             "📋 All Tasks",
-            "➕ Assign Task",
+            "➕ Create New Task",
+            "📌 Assign Task",
             "👨‍⚕️ Coordinator Assignments"
         ]
     )
 
 
     # ======================================================
-    # ALL TASKS
+    # TAB 1 — ALL TASKS
     # ======================================================
 
     with tab1:
@@ -476,17 +542,15 @@ else:
 
             for task in tasks:
 
-                task_id = value(
-                    task,
-                    "Task_ID",
-                    "Task_Id",
-                    "ID"
-                )
-
                 task_rows.append(
                     {
                         "Task ID":
-                            task_id,
+                            value(
+                                task,
+                                "Task_ID",
+                                "Task_Id",
+                                "ID"
+                            ),
 
                         "Task Name":
                             value(
@@ -496,11 +560,10 @@ else:
                                 "Name"
                             ),
 
-                        "Description":
+                        "Category":
                             value(
                                 task,
-                                "Description",
-                                "Task_Description"
+                                "Category"
                             ),
 
                         "Frequency":
@@ -515,10 +578,23 @@ else:
                                 "Priority"
                             ),
 
+                        "Task Link":
+                            value(
+                                task,
+                                "Task_Link",
+                                "Task Link"
+                            ),
+
                         "Status":
                             value(
                                 task,
                                 "Status"
+                            ),
+
+                        "Remarks":
+                            value(
+                                task,
+                                "Remarks"
                             )
                     }
                 )
@@ -534,20 +610,198 @@ else:
 
 
     # ======================================================
-    # ASSIGN TASK
+    # TAB 2 — CREATE NEW TASK
     # ======================================================
 
     with tab2:
 
         st.subheader(
-            "➕ Assign Task to Coordinator"
+            "➕ Create New Task"
+        )
+
+        st.caption(
+            "Create a new task in the Task Master."
         )
 
 
-        if not tasks:
+        with st.form(
+            "create_task_form",
+            clear_on_submit=True
+        ):
+
+            task_name = st.text_input(
+                "Task Name *",
+                placeholder="Enter task name"
+            )
+
+
+            col1, col2 = st.columns(2)
+
+
+            with col1:
+
+                category = st.selectbox(
+                    "Category",
+                    [
+                        "General",
+                        "Reporting",
+                        "Surveillance",
+                        "Data Review",
+                        "Follow-up",
+                        "Administrative",
+                        "Other"
+                    ]
+                )
+
+
+            with col2:
+
+                frequency = st.selectbox(
+                    "Frequency",
+                    [
+                        "Daily",
+                        "Weekly",
+                        "Monthly",
+                        "Quarterly",
+                        "As Required",
+                        "One Time"
+                    ]
+                )
+
+
+            col3, col4 = st.columns(2)
+
+
+            with col3:
+
+                priority = st.selectbox(
+                    "Priority",
+                    [
+                        "Low",
+                        "Medium",
+                        "High",
+                        "Critical"
+                    ],
+                    index=1
+                )
+
+
+            with col4:
+
+                task_link = st.text_input(
+                    "Task Link",
+                    placeholder="Optional URL"
+                )
+
+
+            remarks = st.text_area(
+                "Remarks",
+                placeholder="Optional task remarks",
+                height=120
+            )
+
+
+            create_button = st.form_submit_button(
+                "➕ Create Task",
+                type="primary",
+                use_container_width=True
+            )
+
+
+        if create_button:
+
+            clean_task_name = normalize(
+                task_name
+            )
+
+
+            if not clean_task_name:
+
+                st.error(
+                    "Task Name is required."
+                )
+
+            else:
+
+                try:
+
+                    success, message = (
+                        TaskService.create_task(
+                            task_name=
+                                clean_task_name,
+
+                            category=
+                                category,
+
+                            frequency=
+                                frequency,
+
+                            priority=
+                                priority,
+
+                            task_link=
+                                task_link.strip(),
+
+                            remarks=
+                                remarks.strip()
+                        )
+                    )
+
+
+                    if success:
+
+                        st.success(
+                            message
+                        )
+
+                        st.rerun()
+
+                    else:
+
+                        st.error(
+                            message
+                        )
+
+
+                except Exception as e:
+
+                    st.error(
+                        f"Unable to create task: {e}"
+                    )
+
+
+    # ======================================================
+    # TAB 3 — ASSIGN TASK
+    # ======================================================
+
+    with tab3:
+
+        st.subheader(
+            "📌 Assign Task to Coordinator"
+        )
+
+
+        active_task_list = [
+
+            task
+
+            for task in tasks
+
+            if normalize(
+                value(
+                    task,
+                    "Status"
+                )
+            ).upper()
+            == "ACTIVE"
+
+        ]
+
+
+        if not active_task_list:
 
             st.warning(
-                "No tasks are available for assignment."
+                "No active tasks are available for assignment."
             )
 
         elif not coordinators:
@@ -559,6 +813,7 @@ else:
         else:
 
             coordinator_map = {}
+
 
             for coordinator in coordinators:
 
@@ -576,17 +831,21 @@ else:
                     "User_ID"
                 )
 
-                coordinator_map[
-                    coordinator_id
-                ] = (
-                    f"{coordinator_name} "
-                    f"({coordinator_id})"
-                )
+
+                if coordinator_id:
+
+                    coordinator_map[
+                        coordinator_id
+                    ] = (
+                        f"{coordinator_name} "
+                        f"({coordinator_id})"
+                    )
 
 
             task_map = {}
 
-            for task in tasks:
+
+            for task in active_task_list:
 
                 task_id = value(
                     task,
@@ -602,12 +861,15 @@ else:
                     "Name"
                 )
 
-                task_map[
-                    task_id
-                ] = (
-                    f"{task_name} "
-                    f"({task_id})"
-                )
+
+                if task_id:
+
+                    task_map[
+                        task_id
+                    ] = (
+                        f"{task_name} "
+                        f"({task_id})"
+                    )
 
 
             selected_coordinator = st.selectbox(
@@ -693,6 +955,7 @@ else:
 
                     duplicate = False
 
+
                     for assignment in active_assignments:
 
                         existing_coordinator = normalize(
@@ -711,16 +974,13 @@ else:
                             )
                         )
 
-                        if (
 
+                        if (
                             existing_coordinator
                             == selected_coordinator
-
                             and
-
                             existing_task
                             == selected_task
-
                         ):
 
                             duplicate = True
@@ -793,10 +1053,10 @@ else:
 
 
     # ======================================================
-    # COORDINATOR ASSIGNMENTS
+    # TAB 4 — COORDINATOR ASSIGNMENTS
     # ======================================================
 
-    with tab3:
+    with tab4:
 
         st.subheader(
             "👨‍⚕️ Coordinator Assignments"
@@ -813,6 +1073,7 @@ else:
 
             assignment_rows = []
 
+
             for assignment in active_assignments:
 
                 coordinator_id = value(
@@ -821,13 +1082,16 @@ else:
                     "Coordinator_Id"
                 )
 
+
                 task_id = value(
                     assignment,
                     "Task_ID",
                     "Task_Id"
                 )
 
+
                 coordinator_name = coordinator_id
+
 
                 for coordinator in coordinators:
 
@@ -837,6 +1101,7 @@ else:
                         "User_Id",
                         "ID"
                     )
+
 
                     if cid == coordinator_id:
 
