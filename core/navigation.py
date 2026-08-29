@@ -11,7 +11,6 @@ def normalize_role(role):
         role or ""
     ).strip().lower()
 
-
     role_map = {
 
         "developer": "Developer",
@@ -23,7 +22,6 @@ def normalize_role(role):
         "coordinator": "Coordinator"
 
     }
-
 
     return role_map.get(
         role,
@@ -62,7 +60,6 @@ def require_login(required_role=None):
 
     if required_role is None:
 
-        logout_button()
         return
 
 
@@ -92,8 +89,6 @@ def require_login(required_role=None):
 
             st.stop()
 
-
-        logout_button()
         return
 
 
@@ -115,23 +110,11 @@ def require_login(required_role=None):
         st.stop()
 
 
-    logout_button()
-
-
 # ==========================================================
-# LOGOUT BUTTON
+# GLOBAL LOGOUT / USER SIDEBAR
 # ==========================================================
 
 def logout_button():
-
-    if st.button(
-        "🚪 Logout",
-        key="global_logout_button"
-    ):
-
-        from core.session import logout
-
-        logout()
 
     with st.sidebar:
 
@@ -183,15 +166,18 @@ def logout_button():
             )
 
 
+        st.divider()
+
+
         if st.button(
             "🚪 Logout",
             use_container_width=True,
-            key="global_logout_button"
+            key="sidebar_logout_button"
         ):
 
-            st.session_state.clear()
+            from core.session import logout
 
-            st.rerun()
+            logout()
 
 
 # ==========================================================
