@@ -124,6 +124,15 @@ def require_login(required_role=None):
 
 def logout_button():
 
+    if st.button(
+        "🚪 Logout",
+        key="global_logout_button"
+    ):
+
+        from core.session import logout
+
+        logout()
+
     with st.sidebar:
 
         st.divider()
