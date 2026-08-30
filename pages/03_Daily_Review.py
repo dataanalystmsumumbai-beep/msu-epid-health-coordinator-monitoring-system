@@ -826,3 +826,4 @@ else:
         st.info(
             "No submissions found for the selected filters."
         )
+
