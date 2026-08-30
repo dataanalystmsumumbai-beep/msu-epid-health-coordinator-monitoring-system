@@ -1,29 +1,15 @@
 import streamlit as st
-import pandas as pd
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 
 from core.navigation import require_login
+from core.session import current_user
 
+from services.review_service import ReviewService
 from services.task_assignment_service import TaskAssignmentService
-from services.task_service import TaskService
-
-from utils.google_sheet import (
-    read_all,
-    insert_row,
-    update_value
-)
-
-from config.config import (
-    DAILY_REVIEW,
-    COORDINATOR_TASK_MAP,
-    ROLE_DEVELOPER,
-    ROLE_ADMIN,
-    ROLE_COORDINATOR
-)
 
 
 # ==========================================================
-# PAGE CONFIGURATION
+# PAGE CONFIG
 # ==========================================================
 
 st.set_page_config(
@@ -34,1235 +20,809 @@ st.set_page_config(
 
 
 # ==========================================================
-# ACCESS
+# LOGIN
 # ==========================================================
 
-require_login([
-    ROLE_DEVELOPER,
-    ROLE_ADMIN,
-    ROLE_COORDINATOR
-])
+require_login(
+    ["Admin", "Coordinator", "Developer"]
+)
 
 
-# ==========================================================
-# SESSION
-# ==========================================================
-
-current_username = str(
-    st.session_state.get(
-        "username",
-        ""
-    )
-).strip()
+user = current_user()
 
 current_role = str(
-    st.session_state.get(
+    user.get(
         "role",
         ""
     )
 ).strip()
 
 current_user_id = str(
-    st.session_state.get(
+    user.get(
         "user_id",
-        current_username
+        ""
     )
 ).strip()
 
 
 # ==========================================================
-# HEADER
+# PAGE HEADER
 # ==========================================================
 
 st.title("📝 Daily Review")
 
 st.caption(
-    f"User: {current_username} | Role: {current_role}"
+    "Daily task submission and monitoring"
 )
 
-st.divider()
-
 
 # ==========================================================
-# HELPER
+# HELPERS
 # ==========================================================
-
-def get_value(record, *keys):
-
-    if not record:
-        return ""
-
-    for key in keys:
-
-        value = record.get(
-            key,
-            ""
-        )
-
-        if (
-            value is not None
-            and str(value).strip() != ""
-        ):
-            return value
-
-    return ""
-
 
 def normalize(value):
 
     return str(
-        value if value is not None else ""
+        value
+        if value is not None
+        else ""
     ).strip()
 
 
-# ==========================================================
-# LOAD DATA
-# ==========================================================
+def get_task_name(task_id):
 
-try:
-
-    all_tasks = (
-        TaskService
-        .get_all_tasks()
-    )
-
-except Exception:
-
-    all_tasks = []
-
-
-try:
-
-    all_assignments = (
-        TaskAssignmentService
-        .get_all_assignments()
-    )
-
-except Exception:
-
-    all_assignments = []
-
-
-try:
-
-    all_reviews = read_all(
-        DAILY_REVIEW
-    )
-
-except Exception:
-
-    all_reviews = []
-
-
-all_tasks = all_tasks or []
-all_assignments = all_assignments or []
-all_reviews = all_reviews or []
-
-
-# ==========================================================
-# TASK LOOKUP
-# ==========================================================
-
-task_lookup = {}
-
-for task in all_tasks:
-
-    task_id = normalize(
-        get_value(
-            task,
-            "Task_ID",
-            "Task_Id",
-            "ID"
-        )
-    )
-
-    if task_id:
-
-        task_lookup[
-            task_id
-        ] = task
-
-
-# ==========================================================
-# ASSIGNMENT FILTER
-# ==========================================================
-
-if current_role == ROLE_COORDINATOR:
-
-    assigned_records = [
-
-        assignment
-
-        for assignment in all_assignments
-
-        if normalize(
-            get_value(
-                assignment,
-                "Coordinator_ID",
-                "Coordinator_Id"
-            )
-        )
-        == current_user_id
-
-        and normalize(
-            get_value(
-                assignment,
-                "Status"
-            )
-        ).lower()
-
-        not in [
-            "removed",
-            "inactive",
-            "deleted"
-        ]
-
-    ]
-
-else:
-
-    assigned_records = list(
-        all_assignments
+    return normalize(
+        task_id
     )
 
 
-# ==========================================================
-# BUILD ASSIGNED TASK LIST
-# ==========================================================
+def parse_date(value):
 
-assigned_tasks = []
+    try:
 
-for assignment in assigned_records:
+        return datetime.strptime(
+            normalize(value),
+            "%d-%m-%Y"
+        ).date()
 
-    task_id = normalize(
-        get_value(
-            assignment,
-            "Task_ID",
-            "Task_Id"
-        )
-    )
+    except Exception:
 
-    task = task_lookup.get(
-        task_id,
-        {}
-    )
-
-    task_name = normalize(
-        get_value(
-            task,
-            "Task_Name",
-            "Task",
-            "Name"
-        )
-    )
-
-    if not task_name:
-
-        task_name = normalize(
-            get_value(
-                assignment,
-                "Task_Name",
-                "Task"
-            )
-        )
-
-    assigned_tasks.append(
-        {
-            "assignment": assignment,
-            "task": task,
-            "task_id": task_id,
-            "task_name": task_name
-        }
-    )
+        return None
 
 
 # ==========================================================
 # COORDINATOR VIEW
 # ==========================================================
 
-if current_role == ROLE_COORDINATOR:
+if current_role == "Coordinator":
 
     st.subheader(
         "📋 My Assigned Tasks"
     )
 
-    total_tasks = len(
-        assigned_tasks
+    assignments = (
+        TaskAssignmentService
+        .get_coordinator_tasks(
+            current_user_id
+        )
     )
 
-    completed_tasks = 0
-    in_progress_tasks = 0
-    pending_tasks = 0
 
-    for item in assigned_tasks:
+    if not assignments:
+
+        st.info(
+            "No active tasks are assigned to you."
+        )
+
+        st.stop()
+
+
+    # ------------------------------------------------------
+    # ACTIVE ASSIGNMENTS
+    # ------------------------------------------------------
+
+    active_assignments = []
+
+
+    for assignment in assignments:
 
         status = normalize(
-            get_value(
-                item["assignment"],
-                "Status"
+            assignment.get(
+                "Status",
+                ""
             )
         ).lower()
 
-        if status == "completed":
 
-            completed_tasks += 1
-
-        elif status in [
-            "in progress",
-            "in_progress"
+        if status not in [
+            "removed",
+            "inactive",
+            "deleted"
         ]:
 
-            in_progress_tasks += 1
-
-        else:
-
-            pending_tasks += 1
+            active_assignments.append(
+                assignment
+            )
 
 
-    completion_rate = (
-
-        (
-            completed_tasks
-            / total_tasks
-        )
-        * 100
-
-        if total_tasks > 0
-        else 0
-
-    )
-
-
-    c1, c2, c3, c4 = st.columns(4)
-
-    with c1:
-
-        st.metric(
-            "📋 Assigned",
-            total_tasks
-        )
-
-    with c2:
-
-        st.metric(
-            "✅ Completed",
-            completed_tasks
-        )
-
-    with c3:
-
-        st.metric(
-            "🔄 In Progress",
-            in_progress_tasks
-        )
-
-    with c4:
-
-        st.metric(
-            "📈 Completion",
-            f"{completion_rate:.0f}%"
-        )
-
-
-    if total_tasks > 0:
-
-        st.progress(
-            completion_rate / 100
-        )
-
-    st.caption(
-        f"Overall task completion: "
-        f"{completion_rate:.1f}%"
-    )
-
-    st.divider()
-
-
-    # ======================================================
-    # SUBMIT DAILY REVIEW
-    # ======================================================
-
-    st.subheader(
-        "📝 Submit Daily Review"
-    )
-
-    if not assigned_tasks:
+    if not active_assignments:
 
         st.info(
-            "No active tasks are currently assigned to you."
+            "No active tasks are assigned to you."
         )
+
+        st.stop()
+
+
+    # ------------------------------------------------------
+    # TASK SELECTOR
+    # ------------------------------------------------------
+
+    task_options = []
+
+
+    for assignment in active_assignments:
+
+        task_id = normalize(
+            assignment.get(
+                "Task_ID",
+                ""
+            )
+        )
+
+        if task_id:
+
+            task_options.append(
+                task_id
+            )
+
+
+    task_options = list(
+        dict.fromkeys(
+            task_options
+        )
+    )
+
+
+    selected_task = st.selectbox(
+        "Select Task",
+        task_options,
+        key="daily_review_task"
+    )
+
+
+    # ------------------------------------------------------
+    # REVIEW DATE
+    # ------------------------------------------------------
+
+    selected_date = st.date_input(
+        "Review Date",
+        value=date.today(),
+        key="daily_review_date"
+    )
+
+
+    review_date = (
+        selected_date
+        .strftime(
+            "%d-%m-%Y"
+        )
+    )
+
+
+    # ------------------------------------------------------
+    # EXISTING SUBMISSION
+    # ------------------------------------------------------
+
+    existing_submission = (
+        ReviewService
+        .get_submission(
+            current_user_id,
+            selected_task,
+            review_date
+        )
+    )
+
+
+    if existing_submission:
+
+        st.success(
+            f"✅ Already submitted for {review_date}"
+        )
+
+
+        st.info(
+            "This task has already been submitted for "
+            "the selected date."
+        )
+
+
+        st.write(
+            "**Status:** "
+            + normalize(
+                existing_submission.get(
+                    "Status",
+                    ""
+                )
+            )
+        )
+
+
+        remarks = normalize(
+            existing_submission.get(
+                "Remarks",
+                ""
+            )
+        )
+
+
+        if remarks:
+
+            st.write(
+                "**Remarks:** "
+                + remarks
+            )
+
 
     else:
 
-        task_options = {}
+        # --------------------------------------------------
+        # NEW DAILY SUBMISSION
+        # --------------------------------------------------
 
-        for item in assigned_tasks:
-
-            assignment = item[
-                "assignment"
-            ]
-
-            task_id = item[
-                "task_id"
-            ]
-
-            task_name = item[
-                "task_name"
-            ]
-
-            due_date = normalize(
-                get_value(
-                    assignment,
-                    "Due_Date",
-                    "Due Date"
-                )
-            )
-
-            label = task_name or task_id
-
-            if due_date:
-
-                label = (
-                    f"{label} | "
-                    f"Due: {due_date}"
-                )
-
-            task_options[
-                task_id
-            ] = label
-
-
-        selected_task_id = st.selectbox(
-            "Select Assigned Task",
-            list(
-                task_options.keys()
-            ),
-            format_func=lambda x:
-                task_options.get(
-                    x,
-                    x
-                ),
-            key="daily_review_task"
+        st.subheader(
+            "📤 Submit Daily Review"
         )
 
 
-        selected_item = None
-
-        for item in assigned_tasks:
-
-            if (
-                item["task_id"]
-                == selected_task_id
-            ):
-
-                selected_item = item
-
-                break
-
-
-        selected_assignment = (
-            selected_item["assignment"]
-            if selected_item
-            else {}
+        status = st.selectbox(
+            "Task Status",
+            [
+                "Completed",
+                "Pending",
+                "In Progress"
+            ],
+            key="daily_submission_status"
         )
-
-
-        assignment_id = normalize(
-            get_value(
-                selected_assignment,
-                "Assignment_ID",
-                "Assignment_Id",
-                "ID"
-            )
-        )
-
-
-        st.info(
-            f"Selected Task: "
-            f"**{task_options.get(selected_task_id, selected_task_id)}**"
-        )
-
-
-        col1, col2 = st.columns(2)
-
-        with col1:
-
-            review_date = st.date_input(
-                "Review Date",
-                value=date.today(),
-                key="review_date"
-            )
-
-        with col2:
-
-            review_status = st.selectbox(
-                "Status",
-                [
-                    "Completed",
-                    "In Progress",
-                    "Pending"
-                ],
-                key="review_status"
-            )
 
 
         remarks = st.text_area(
-            "Remarks / Progress Update",
+            "Remarks",
             placeholder=(
-                "Enter today's work, progress, "
-                "observations or pending reason."
+                "Enter remarks or work details..."
             ),
-            height=150,
-            key="review_remarks"
+            key="daily_submission_remarks"
         )
 
 
-        submit_review = st.button(
-            "✅ Submit Daily Review",
+        if st.button(
+            "📤 Submit Daily Review",
             type="primary",
             use_container_width=True,
             key="submit_daily_review"
-        )
+        ):
 
-
-        if submit_review:
-
-            review_date_text = (
-                review_date.strftime(
-                    "%d-%m-%Y"
+            success, message = (
+                ReviewService
+                .create_review(
+                    review_date=review_date,
+                    coordinator_id=current_user_id,
+                    task_id=selected_task,
+                    status=status,
+                    remarks=remarks
                 )
             )
 
 
-            # ----------------------------------------------
-            # VALIDATION
-            # ----------------------------------------------
+            if success:
 
-            if not selected_task_id:
-
-                st.error(
-                    "Please select a task."
+                st.success(
+                    message
                 )
 
-                st.stop()
-
-
-            if (
-                review_status != "Pending"
-                and not remarks.strip()
-            ):
-
-                st.error(
-                    "Please enter the progress / remarks."
-                )
-
-                st.stop()
-
-
-            # ----------------------------------------------
-            # DUPLICATE CHECK
-            # ----------------------------------------------
-
-            duplicate = False
-
-            for review in all_reviews:
-
-                existing_coordinator = normalize(
-                    get_value(
-                        review,
-                        "Coordinator_ID",
-                        "Coordinator_Id",
-                        "User_ID",
-                        "Username"
-                    )
-                )
-
-                existing_task = normalize(
-                    get_value(
-                        review,
-                        "Task_ID",
-                        "Task_Id"
-                    )
-                )
-
-                existing_date = normalize(
-                    get_value(
-                        review,
-                        "Review_Date",
-                        "Date"
-                    )
-                )
-
-
-                if (
-
-                    existing_coordinator
-                    == current_user_id
-
-                    and
-
-                    existing_task
-                    == selected_task_id
-
-                    and
-
-                    existing_date
-                    == review_date_text
-
-                    and
-
-                    normalize(
-                        get_value(
-                            review,
-                            "Status"
-                        )
-                    ).upper()
-                    != "DELETED"
-
-                ):
-
-                    duplicate = True
-
-                    break
-
-
-            if duplicate:
-
-                st.error(
-                    "Daily Review for this task and date "
-                    "has already been submitted."
-                )
+                st.rerun()
 
             else:
 
-                try:
-
-                    review_id = (
-                        "REV-"
-                        + datetime.now().strftime(
-                            "%Y%m%d%H%M%S%f"
-                        )[:20]
-                    )
+                st.error(
+                    message
+                )
 
 
-                    submitted_on = (
-                        datetime.now().strftime(
-                            "%d-%m-%Y %H:%M"
-                        )
-                    )
-
-
-                    # ------------------------------------------
-                    # DAILY REVIEW SHEET
-                    #
-                    # 1 Review_ID
-                    # 2 Date
-                    # 3 Coordinator_ID
-                    # 4 Task_ID
-                    # 5 Assignment_ID
-                    # 6 Status
-                    # 7 Remarks
-                    # 8 Submitted_At
-                    # ------------------------------------------
-
-                    row = [
-
-                        review_id,
-
-                        review_date_text,
-
-                        current_user_id,
-
-                        selected_task_id,
-
-                        assignment_id,
-
-                        review_status,
-
-                        remarks.strip(),
-
-                        submitted_on
-
-                    ]
-
-
-                    insert_row(
-                        DAILY_REVIEW,
-                        row
-                    )
-
-
-                    # ------------------------------------------
-                    # UPDATE ASSIGNMENT STATUS
-                    # ------------------------------------------
-
-                    assignment_row = None
-
-                    for row_number, assignment in enumerate(
-                        all_assignments,
-                        start=2
-                    ):
-
-                        existing_assignment_id = normalize(
-                            get_value(
-                                assignment,
-                                "Assignment_ID",
-                                "Assignment_Id",
-                                "ID"
-                            )
-                        )
-
-                        if (
-                            existing_assignment_id
-                            == assignment_id
-                        ):
-
-                            assignment_row = (
-                                row_number
-                            )
-
-                            break
-
-
-                    if assignment_row:
-
-                        update_value(
-                            COORDINATOR_TASK_MAP,
-                            assignment_row,
-                            8,
-                            review_status
-                        )
-
-
-                    st.success(
-                        "✅ Daily Review submitted successfully."
-                    )
-
-                    st.rerun()
-
-
-                except Exception as e:
-
-                    st.error(
-                        f"Unable to submit Daily Review: {e}"
-                    )
-
+    # ======================================================
+    # SUBMISSION HISTORY
+    # ======================================================
 
     st.divider()
 
-
-    # ======================================================
-    # COORDINATOR REVIEW HISTORY
-    # ======================================================
-
     st.subheader(
-        "📚 My Review History"
+        "📚 My Submission History"
     )
 
 
-    my_reviews = [
+    history = (
+        ReviewService
+        .get_reviews_by_coordinator(
+            current_user_id
+        )
+    )
 
-        review
 
-        for review in all_reviews
+    task_history = [
+
+        row
+
+        for row in history
 
         if normalize(
-            get_value(
-                review,
-                "Coordinator_ID",
-                "Coordinator_Id",
-                "User_ID",
-                "Username"
+            row.get(
+                "Task_ID",
+                ""
             )
         )
-        == current_user_id
-
-        and
-
-        normalize(
-            get_value(
-                review,
-                "Status"
-            )
-        ).upper()
-        != "DELETED"
+        ==
+        selected_task
 
     ]
 
 
-    if not my_reviews:
+    if task_history:
 
-        st.info(
-            "No Daily Reviews submitted yet."
-        )
-
-    else:
-
-        history_rows = []
-
-        for review in my_reviews:
-
-            task_id = normalize(
-                get_value(
-                    review,
-                    "Task_ID",
-                    "Task_Id"
-                )
-            )
-
-            task = task_lookup.get(
-                task_id,
-                {}
-            )
-
-            task_name = normalize(
-                get_value(
-                    task,
-                    "Task_Name",
-                    "Task",
-                    "Name"
-                )
-            )
-
-            if not task_name:
-
-                task_name = task_id
+        display_rows = []
 
 
-            history_rows.append(
-                {
-                    "Review ID":
-                        get_value(
-                            review,
-                            "Review_ID"
-                        ),
+        for row in task_history:
 
-                    "Date":
-                        get_value(
-                            review,
+            display_rows.append({
+
+                "Date":
+                    normalize(
+                        row.get(
                             "Date",
-                            "Review_Date"
-                        ),
-
-                    "Task":
-                        task_name,
-
-                    "Status":
-                        get_value(
-                            review,
-                            "Status"
-                        ),
-
-                    "Remarks":
-                        get_value(
-                            review,
-                            "Remarks"
-                        ),
-
-                    "Submitted At":
-                        get_value(
-                            review,
-                            "Submitted_At"
+                            ""
                         )
-                }
-            )
+                    ),
+
+                "Task":
+                    normalize(
+                        row.get(
+                            "Task_ID",
+                            ""
+                        )
+                    ),
+
+                "Status":
+                    normalize(
+                        row.get(
+                            "Status",
+                            ""
+                        )
+                    ),
+
+                "Remarks":
+                    normalize(
+                        row.get(
+                            "Remarks",
+                            ""
+                        )
+                    ),
+
+                "Submitted At":
+                    normalize(
+                        row.get(
+                            "Submitted_At",
+                            ""
+                        )
+                    )
+
+            })
 
 
         st.dataframe(
-            pd.DataFrame(
-                history_rows
-            ),
+            display_rows,
             use_container_width=True,
             hide_index=True
         )
 
+    else:
+
+        st.info(
+            "No submission history found for this task."
+        )
+
 
 # ==========================================================
-# ADMIN / DEVELOPER MONITORING
+# ADMIN / DEVELOPER VIEW
 # ==========================================================
 
 else:
 
     st.subheader(
-        "📊 Daily Review Monitoring"
+        "📊 Review Monitoring"
     )
 
 
-    # ======================================================
-    # METRICS
-    # ======================================================
+    # ------------------------------------------------------
+    # DATE RANGE
+    # ------------------------------------------------------
 
-    active_reviews = [
+    col1, col2 = st.columns(2)
 
-        review
 
-        for review in all_reviews
+    with col1:
+
+        from_date = st.date_input(
+            "From Date",
+            value=date.today(),
+            key="review_from_date"
+        )
+
+
+    with col2:
+
+        to_date = st.date_input(
+            "To Date",
+            value=date.today(),
+            key="review_to_date"
+        )
+
+
+    if from_date > to_date:
+
+        st.error(
+            "From Date cannot be greater than To Date."
+        )
+
+        st.stop()
+
+
+    # ------------------------------------------------------
+    # GET REVIEWS
+    # ------------------------------------------------------
+
+    reviews = (
+        ReviewService
+        .get_reviews_by_date_range(
+            from_date.strftime(
+                "%d-%m-%Y"
+            ),
+            to_date.strftime(
+                "%d-%m-%Y"
+            )
+        )
+    )
+
+
+    # ------------------------------------------------------
+    # FILTERS
+    # ------------------------------------------------------
+
+    coordinators = [
+
+        normalize(
+            row.get(
+                "Coordinator_ID",
+                ""
+            )
+        )
+
+        for row in reviews
 
         if normalize(
-            get_value(
-                review,
-                "Status"
+            row.get(
+                "Coordinator_ID",
+                ""
             )
-        ).upper()
-        != "DELETED"
+        )
 
     ]
 
 
-    total_reviews = len(
-        active_reviews
+    tasks = [
+
+        normalize(
+            row.get(
+                "Task_ID",
+                ""
+            )
+        )
+
+        for row in reviews
+
+        if normalize(
+            row.get(
+                "Task_ID",
+                ""
+            )
+        )
+
+    ]
+
+
+    coordinators = sorted(
+        list(
+            dict.fromkeys(
+                coordinators
+            )
+        )
     )
 
 
-    completed_reviews = sum(
+    tasks = sorted(
+        list(
+            dict.fromkeys(
+                tasks
+            )
+        )
+    )
+
+
+    filter_col1, filter_col2 = st.columns(2)
+
+
+    with filter_col1:
+
+        selected_coordinator = st.selectbox(
+            "Coordinator",
+            ["All"] + coordinators,
+            key="review_coordinator_filter"
+        )
+
+
+    with filter_col2:
+
+        selected_task_filter = st.selectbox(
+            "Task",
+            ["All"] + tasks,
+            key="review_task_filter"
+        )
+
+
+    filtered_reviews = reviews
+
+
+    if selected_coordinator != "All":
+
+        filtered_reviews = [
+
+            row
+
+            for row in filtered_reviews
+
+            if normalize(
+                row.get(
+                    "Coordinator_ID",
+                    ""
+                )
+            )
+            ==
+            selected_coordinator
+
+        ]
+
+
+    if selected_task_filter != "All":
+
+        filtered_reviews = [
+
+            row
+
+            for row in filtered_reviews
+
+            if normalize(
+                row.get(
+                    "Task_ID",
+                    ""
+                )
+            )
+            ==
+            selected_task_filter
+
+        ]
+
+
+    # ======================================================
+    # SUMMARY
+    # ======================================================
+
+    st.divider()
+
+    st.subheader(
+        "📈 Review Summary"
+    )
+
+
+    total = len(
+        filtered_reviews
+    )
+
+
+    completed = sum(
 
         1
 
-        for review in active_reviews
+        for row in filtered_reviews
 
         if normalize(
-            get_value(
-                review,
-                "Status"
+            row.get(
+                "Status",
+                ""
             )
-        ).lower()
-        == "completed"
+        ).upper()
+        == "COMPLETED"
 
     )
 
 
-    pending_reviews = sum(
+    pending = sum(
 
         1
 
-        for review in active_reviews
+        for row in filtered_reviews
 
         if normalize(
-            get_value(
-                review,
-                "Status"
+            row.get(
+                "Status",
+                ""
             )
-        ).lower()
-        == "pending"
+        ).upper()
+        == "PENDING"
 
     )
 
 
-    in_progress_reviews = sum(
+    in_progress = sum(
 
         1
 
-        for review in active_reviews
+        for row in filtered_reviews
 
         if normalize(
-            get_value(
-                review,
-                "Status"
+            row.get(
+                "Status",
+                ""
             )
-        ).lower()
+        ).upper()
+
         in [
-            "in progress",
-            "in_progress"
+            "IN PROGRESS",
+            "IN_PROGRESS"
         ]
 
     )
 
 
-    c1, c2, c3, c4 = st.columns(4)
+    completion_percentage = (
 
-
-    with c1:
-
-        st.metric(
-            "📝 Total Reviews",
-            total_reviews
+        round(
+            (
+                completed
+                /
+                total
+            )
+            * 100,
+            2
         )
 
+        if total
 
-    with c2:
+        else 0
 
-        st.metric(
-            "✅ Completed",
-            completed_reviews
-        )
+    )
 
 
-    with c3:
-
-        st.metric(
-            "⏳ Pending",
-            pending_reviews
-        )
+    metric1, metric2, metric3, metric4, metric5 = st.columns(5)
 
 
-    with c4:
+    metric1.metric(
+        "Submissions",
+        total
+    )
 
-        st.metric(
-            "🔄 In Progress",
-            in_progress_reviews
-        )
 
+    metric2.metric(
+        "Completed",
+        completed
+    )
+
+
+    metric3.metric(
+        "Pending",
+        pending
+    )
+
+
+    metric4.metric(
+        "In Progress",
+        in_progress
+    )
+
+
+    metric5.metric(
+        "Completion",
+        f"{completion_percentage}%"
+    )
+
+
+    # ======================================================
+    # REVIEW TABLE
+    # ======================================================
 
     st.divider()
 
-
-    # ======================================================
-    # COORDINATOR-WISE SUMMARY
-    # ======================================================
-
     st.subheader(
-        "👨‍⚕️ Coordinator-wise Review Summary"
+        "📋 Submission Details"
     )
 
 
-    coordinator_summary = {}
-
-
-    for review in active_reviews:
-
-        coordinator_id = normalize(
-            get_value(
-                review,
-                "Coordinator_ID",
-                "Coordinator_Id",
-                "User_ID",
-                "Username"
-            )
-        )
-
-        if not coordinator_id:
-
-            coordinator_id = "Unknown"
-
-
-        if coordinator_id not in coordinator_summary:
-
-            coordinator_summary[
-                coordinator_id
-            ] = {
-                "Total": 0,
-                "Completed": 0,
-                "In Progress": 0,
-                "Pending": 0
-            }
-
-
-        coordinator_summary[
-            coordinator_id
-        ]["Total"] += 1
-
-
-        status = normalize(
-            get_value(
-                review,
-                "Status"
-            )
-        ).lower()
-
-
-        if status == "completed":
-
-            coordinator_summary[
-                coordinator_id
-            ]["Completed"] += 1
-
-        elif status in [
-            "in progress",
-            "in_progress"
-        ]:
-
-            coordinator_summary[
-                coordinator_id
-            ]["In Progress"] += 1
-
-        elif status == "pending":
-
-            coordinator_summary[
-                coordinator_id
-            ]["Pending"] += 1
-
-
-    summary_rows = []
-
-
-    for coordinator_id, values in (
-        coordinator_summary.items()
-    ):
-
-        total = values[
-            "Total"
-        ]
-
-        completed = values[
-            "Completed"
-        ]
-
-        completion = (
-
-            completed
-            / total
-            * 100
-
-            if total
-            else 0
-
-        )
-
-
-        summary_rows.append(
-            {
-                "Coordinator":
-                    coordinator_id,
-
-                "Total Reviews":
-                    total,
-
-                "Completed":
-                    completed,
-
-                "In Progress":
-                    values[
-                        "In Progress"
-                    ],
-
-                "Pending":
-                    values[
-                        "Pending"
-                    ],
-
-                "Completion %":
-                    round(
-                        completion,
-                        1
-                    )
-            }
-        )
-
-
-    if summary_rows:
-
-        st.dataframe(
-            pd.DataFrame(
-                summary_rows
-            ),
-            use_container_width=True,
-            hide_index=True
-        )
-
-    else:
-
-        st.info(
-            "No Coordinator review data available."
-        )
-
-
-    st.divider()
-
-
-    # ======================================================
-    # ALL REVIEWS
-    # ======================================================
-
-    st.subheader(
-        "📋 All Daily Reviews"
-    )
-
-
-    if not active_reviews:
-
-        st.info(
-            "No Daily Review records available."
-        )
-
-    else:
+    if filtered_reviews:
 
         display_rows = []
 
 
-        for review in active_reviews:
+        for row in filtered_reviews:
 
-            task_id = normalize(
-                get_value(
-                    review,
-                    "Task_ID",
-                    "Task_Id"
-                )
-            )
+            display_rows.append({
 
-
-            task = task_lookup.get(
-                task_id,
-                {}
-            )
-
-
-            task_name = normalize(
-                get_value(
-                    task,
-                    "Task_Name",
-                    "Task",
-                    "Name"
-                )
-            )
-
-
-            if not task_name:
-
-                task_name = task_id
-
-
-            display_rows.append(
-                {
-                    "Review ID":
-                        get_value(
-                            review,
-                            "Review_ID"
-                        ),
-
-                    "Date":
-                        get_value(
-                            review,
+                "Date":
+                    normalize(
+                        row.get(
                             "Date",
-                            "Review_Date"
-                        ),
-
-                    "Coordinator":
-                        get_value(
-                            review,
-                            "Coordinator_ID",
-                            "Coordinator_Id",
-                            "User_ID",
-                            "Username"
-                        ),
-
-                    "Task":
-                        task_name,
-
-                    "Status":
-                        get_value(
-                            review,
-                            "Status"
-                        ),
-
-                    "Remarks":
-                        get_value(
-                            review,
-                            "Remarks"
-                        ),
-
-                    "Submitted At":
-                        get_value(
-                            review,
-                            "Submitted_At"
+                            ""
                         )
-                }
-            )
+                    ),
+
+                "Coordinator":
+                    normalize(
+                        row.get(
+                            "Coordinator_ID",
+                            ""
+                        )
+                    ),
+
+                "Task":
+                    normalize(
+                        row.get(
+                            "Task_ID",
+                            ""
+                        )
+                    ),
+
+                "Status":
+                    normalize(
+                        row.get(
+                            "Status",
+                            ""
+                        )
+                    ),
+
+                "Remarks":
+                    normalize(
+                        row.get(
+                            "Remarks",
+                            ""
+                        )
+                    ),
+
+                "Submitted At":
+                    normalize(
+                        row.get(
+                            "Submitted_At",
+                            ""
+                        )
+                    )
+
+            })
 
 
         st.dataframe(
-            pd.DataFrame(
-                display_rows
-            ),
+            display_rows,
             use_container_width=True,
             hide_index=True
+        )
+
+    else:
+
+        st.info(
+            "No submissions found for the selected filters."
         )
