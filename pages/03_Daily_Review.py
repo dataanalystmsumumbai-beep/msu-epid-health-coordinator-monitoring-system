@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
 import calendar
+from uuid import uuid4
 
 from core.navigation import require_login
 
