@@ -529,6 +529,9 @@ else:
             "📋 Task Master"
         )
 
+        st.caption(
+            "View all tasks and enable or disable tasks without deleting their history."
+        )
 
         if not tasks:
 
@@ -540,65 +543,108 @@ else:
 
             task_rows = []
 
-            for task in tasks:
+            for row_no, task in enumerate(
+                tasks,
+                start=2
+            ):
+
+                task_id = value(
+                    task,
+                    "Task_ID",
+                    "Task_Id",
+                    "ID"
+                )
+
+                task_status = normalize(
+                    value(
+                        task,
+                        "Status"
+                    )
+                ).upper() or "ACTIVE"
 
                 task_rows.append(
                     {
-                        "Task ID":
-                            value(
-                                task,
-                                "Task_ID",
-                                "Task_Id",
-                                "ID"
-                            ),
-
-                        "Task Name":
-                            value(
-                                task,
-                                "Task_Name",
-                                "Task",
-                                "Name"
-                            ),
-
-                        "Category":
-                            value(
-                                task,
-                                "Category"
-                            ),
-
-                        "Frequency":
-                            value(
-                                task,
-                                "Frequency"
-                            ),
-
-                        "Priority":
-                            value(
-                                task,
-                                "Priority"
-                            ),
-
-                        "Task Link":
-                            value(
-                                task,
-                                "Task_Link",
-                                "Task Link"
-                            ),
-
-                        "Status":
-                            value(
-                                task,
-                                "Status"
-                            ),
-
-                        "Remarks":
-                            value(
-                                task,
-                                "Remarks"
-                            )
+                        "Task ID": task_id,
+                        "Task Name": value(
+                            task,
+                            "Task_Name",
+                            "Task",
+                            "Name"
+                        ),
+                        "Category": value(
+                            task,
+                            "Category"
+                        ),
+                        "Frequency": value(
+                            task,
+                            "Frequency"
+                        ),
+                        "Priority": value(
+                            task,
+                            "Priority"
+                        ),
+                        "Task Link": value(
+                            task,
+                            "Task_Link",
+                            "Task Link"
+                        ),
+                        "Status": task_status,
+                        "Remarks": value(
+                            task,
+                            "Remarks"
+                        )
                     }
                 )
 
+                action_col1, action_col2 = st.columns([5, 1])
+
+                with action_col1:
+                    st.markdown(
+                        f"**{task_id}** — "
+                        f"{value(task, 'Task_Name', 'Task', 'Name')}"
+                    )
+
+                with action_col2:
+                    if task_status == "ACTIVE":
+                        if st.button(
+                            "🔴 Disable",
+                            key=f"disable_task_{row_no}",
+                            use_container_width=True
+                        ):
+                            try:
+                                success, message = TaskService.deactivate_task(
+                                    row_no
+                                )
+                                if success:
+                                    st.success(message)
+                                    st.rerun()
+                                else:
+                                    st.error(message)
+                            except Exception as e:
+                                st.error(
+                                    f"Unable to disable task: {e}"
+                                )
+                    else:
+                        if st.button(
+                            "🟢 Enable",
+                            key=f"enable_task_{row_no}",
+                            use_container_width=True
+                        ):
+                            try:
+                                success, message = TaskService.activate_task(
+                                    row_no
+                                )
+                                if success:
+                                    st.success(message)
+                                    st.rerun()
+                                else:
+                                    st.error(message)
+                            except Exception as e:
+                                st.error(
+                                    f"Unable to enable task: {e}"
+                                )
+
+            st.divider()
 
             st.dataframe(
                 pd.DataFrame(
@@ -607,7 +653,6 @@ else:
                 use_container_width=True,
                 hide_index=True
             )
-
 
     # ======================================================
     # TAB 2 — CREATE NEW TASK
