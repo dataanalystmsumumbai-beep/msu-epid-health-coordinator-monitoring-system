@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
 import calendar
+from zoneinfo import ZoneInfo
 
 from core.navigation import require_login
 
@@ -76,6 +77,11 @@ current_user_id = str(
         current_username
     )
 ).strip()
+
+
+# India local date is used for Daily Review validation.
+INDIA_TZ = ZoneInfo("Asia/Kolkata")
+today = datetime.now(INDIA_TZ).date()
 
 
 # ==========================================================
@@ -408,21 +414,6 @@ for assignment in assigned_records:
     )
 
 
-    task_status = normalize(
-        get_value(
-            task,
-            "Status"
-        )
-    ).upper()
-
-
-    # Coordinators can only review tasks that are currently ACTIVE.
-    # Existing assignments remain in history, but an INACTIVE/DELETED
-    # Task Master record must not be available for new submissions.
-    if current_role == ROLE_COORDINATOR and task_status != "ACTIVE":
-        continue
-
-
     task_name = normalize(
         get_value(
             task,
@@ -442,6 +433,20 @@ for assignment in assigned_records:
                 "Task"
             )
         )
+
+
+    # A task disabled in 03_Task_Master must immediately stop
+    # appearing as a selectable task for new Coordinator reviews.
+    task_status = normalize_status(
+        get_value(
+            task,
+            "Status"
+        )
+    ) or "active"
+
+    if task_status != "active":
+
+        continue
 
 
     assigned_tasks.append(
@@ -595,7 +600,7 @@ def expected_dates_for_assignment(
     # DO NOT CREATE FUTURE EXPECTATIONS
     # ------------------------------------------------------
 
-    today = date.today()
+    today = today
 
 
     end_date = min(
@@ -1030,6 +1035,29 @@ if current_role == ROLE_COORDINATOR:
         )
 
 
+        # Re-check Task Master status from the latest Google Sheet data.
+        # This prevents submission even when a task was disabled after
+        # the page was opened.
+        live_task = TaskService.get_task(
+            selected_task_id
+        ) or selected_task
+
+        live_task_status = normalize_status(
+            get_value(
+                live_task,
+                "Status"
+            )
+        ) or "active"
+
+        if live_task_status != "active":
+
+            st.error(
+                "🚫 This task is currently **INACTIVE** and cannot receive a new Daily Review."
+            )
+
+            st.stop()
+
+
         assignment_id = normalize(
             get_value(
                 selected_assignment,
@@ -1038,26 +1066,6 @@ if current_role == ROLE_COORDINATOR:
                 "ID"
             )
         )
-
-
-        task_status = normalize(
-            get_value(
-                selected_task,
-                "Status"
-            )
-        ).upper()
-
-
-        # Safety check: even if a stale Streamlit selection remains,
-        # an inactive/deleted task can never receive a new review.
-        if current_role == ROLE_COORDINATOR and task_status != "ACTIVE":
-
-            st.error(
-                "🚫 This task is currently INACTIVE and cannot receive a new Daily Review. "
-                "Please ask Admin/Developer to enable the task if it should be resumed."
-            )
-
-            st.stop()
 
 
         frequency = normalize_frequency(
@@ -1113,11 +1121,25 @@ if current_role == ROLE_COORDINATOR:
         # REVIEW DATE
         # --------------------------------------------------
 
-        review_date = st.date_input(
-            "Review Date",
-            value=date.today(),
-            key="daily_review_date_input"
-        )
+        if frequency == "Daily":
+
+            # Daily reviews are strictly for the current India date.
+            # Coordinators cannot back-date or future-date a Daily Review.
+            review_date = today
+
+            st.info(
+                "📅 **Review Date:** "
+                f"**{today.strftime('%d-%m-%Y')}** "
+                "| Daily tasks can only be submitted for today."
+            )
+
+        else:
+
+            review_date = st.date_input(
+                "Review Date",
+                value=today,
+                key="daily_review_date_input"
+            )
 
 
         # --------------------------------------------------
@@ -1134,7 +1156,7 @@ if current_role == ROLE_COORDINATOR:
                     selected_assignment,
                     selected_task,
                     assigned_date,
-                    date.today()
+                    today
                 )
             )
 
@@ -1299,10 +1321,40 @@ if current_role == ROLE_COORDINATOR:
                     st.stop()
 
 
-                if review_date > date.today():
+                if frequency == "Daily" and review_date != today:
+
+                    st.error(
+                        "🚫 Daily Review can only be submitted for today's date."
+                    )
+
+                    st.stop()
+
+
+                if review_date > today:
 
                     st.error(
                         "Future date submission is not allowed."
+                    )
+
+                    st.stop()
+
+
+                # Final live status check immediately before writing to Google Sheets.
+                live_task = TaskService.get_task(
+                    selected_task_id
+                ) or selected_task
+
+                live_task_status = normalize_status(
+                    get_value(
+                        live_task,
+                        "Status"
+                    )
+                ) or "active"
+
+                if live_task_status != "active":
+
+                    st.error(
+                        "🚫 This task is currently **INACTIVE**. Submission has been blocked."
                     )
 
                     st.stop()
@@ -1660,7 +1712,7 @@ else:
     # ======================================================
 
     default_from = (
-        date.today()
+        today
         - timedelta(
             days=6
         )
@@ -1683,7 +1735,7 @@ else:
 
         period_end = st.date_input(
             "To Date",
-            value=date.today(),
+            value=today,
             key="monitoring_to_date"
         )
 
