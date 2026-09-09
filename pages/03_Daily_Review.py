@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
 import calendar
-from uuid import uuid4
 
 from core.navigation import require_login
 
@@ -407,6 +406,21 @@ for assignment in assigned_records:
         task_id,
         {}
     )
+
+
+    task_status = normalize(
+        get_value(
+            task,
+            "Status"
+        )
+    ).upper()
+
+
+    # Coordinators can only review tasks that are currently ACTIVE.
+    # Existing assignments remain in history, but an INACTIVE/DELETED
+    # Task Master record must not be available for new submissions.
+    if current_role == ROLE_COORDINATOR and task_status != "ACTIVE":
+        continue
 
 
     task_name = normalize(
@@ -1024,6 +1038,26 @@ if current_role == ROLE_COORDINATOR:
                 "ID"
             )
         )
+
+
+        task_status = normalize(
+            get_value(
+                selected_task,
+                "Status"
+            )
+        ).upper()
+
+
+        # Safety check: even if a stale Streamlit selection remains,
+        # an inactive/deleted task can never receive a new review.
+        if current_role == ROLE_COORDINATOR and task_status != "ACTIVE":
+
+            st.error(
+                "🚫 This task is currently INACTIVE and cannot receive a new Daily Review. "
+                "Please ask Admin/Developer to enable the task if it should be resumed."
+            )
+
+            st.stop()
 
 
         frequency = normalize_frequency(
