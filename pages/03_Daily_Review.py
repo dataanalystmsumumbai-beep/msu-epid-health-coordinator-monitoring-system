@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
 import calendar
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
 from core.navigation import require_login
@@ -23,6 +24,7 @@ from utils.google_sheet import (
 from config.config import (
     DAILY_REVIEW,
     COORDINATOR_TASK_MAP,
+    TASK_MASTER,
     ROLE_DEVELOPER,
     ROLE_ADMIN,
     ROLE_COORDINATOR
@@ -92,6 +94,8 @@ st.title(
     "📝 Daily Review"
 )
 
+st.caption("Policy: TODAY-ONLY + ACTIVE-TASK-ONLY | HARD RULES v17")
+
 st.caption(
     f"User: {current_username} | Role: {current_role}"
 )
@@ -149,6 +153,95 @@ def normalize_status(
         "_",
         " "
     )
+
+
+def clean_key(value):
+
+    return (
+        str(value or "")
+        .replace("\ufeff", "")
+        .strip()
+        .lower()
+        .replace(" ", "_")
+    )
+
+
+def get_value_robust(record, *keys):
+
+    if not record:
+
+        return ""
+
+    normalized_record = {
+        clean_key(key): value
+        for key, value in record.items()
+    }
+
+    for key in keys:
+
+        value = normalized_record.get(
+            clean_key(key),
+            ""
+        )
+
+        if value is not None and str(value).strip() != "":
+
+            return value
+
+    return ""
+
+
+def get_live_task_from_sheet(task_id):
+
+    target_id = normalize(task_id)
+
+    if not target_id:
+
+        return None
+
+    try:
+
+        fresh_tasks = read_all(TASK_MASTER) or []
+
+    except Exception:
+
+        return None
+
+    for task in fresh_tasks:
+
+        live_id = normalize(
+            get_value_robust(
+                task,
+                "Task_ID",
+                "Task_Id",
+                "ID"
+            )
+        )
+
+        if live_id == target_id:
+
+            return task
+
+    return None
+
+
+def is_live_task_active(task):
+
+    if not task:
+
+        return False
+
+    status = normalize_status(
+        get_value_robust(
+            task,
+            "Status",
+            "Task_Status",
+            "Task Status"
+        )
+    )
+
+    # Fail closed: only an explicit ACTIVE task is allowed.
+    return status == "active"
 
 
 def parse_date(
@@ -435,18 +528,25 @@ for assignment in assigned_records:
         )
 
 
-    # A task disabled in 03_Task_Master must immediately stop
-    # appearing as a selectable task for new Coordinator reviews.
-    task_status = normalize_status(
-        get_value(
-            task,
-            "Status"
-        )
-    ) or "active"
+    # A task must exist in the live Task Master and must be
+    # explicitly ACTIVE. Missing/unknown status is treated as inactive.
+    live_task_for_list = get_live_task_from_sheet(task_id)
 
-    if task_status != "active":
+    if not is_live_task_active(live_task_for_list):
 
         continue
+
+    # Use the fresh Task Master record for all new-review decisions.
+    task = live_task_for_list
+
+    task_name = normalize(
+        get_value_robust(
+            task,
+            "Task_Name",
+            "Task",
+            "Name"
+        )
+    ) or task_name
 
 
     assigned_tasks.append(
@@ -599,9 +699,6 @@ def expected_dates_for_assignment(
     # ------------------------------------------------------
     # DO NOT CREATE FUTURE EXPECTATIONS
     # ------------------------------------------------------
-
-    today = today
-
 
     end_date = min(
         end_date,
@@ -1035,27 +1132,22 @@ if current_role == ROLE_COORDINATOR:
         )
 
 
-        # Re-check Task Master status from the latest Google Sheet data.
-        # This prevents submission even when a task was disabled after
-        # the page was opened.
-        live_task = TaskService.get_task(
+        # HARD RULE: read Task Master directly from Google Sheets.
+        # Never fall back to the stale selected task and never assume ACTIVE.
+        live_task = get_live_task_from_sheet(
             selected_task_id
-        ) or selected_task
+        )
 
-        live_task_status = normalize_status(
-            get_value(
-                live_task,
-                "Status"
-            )
-        ) or "active"
-
-        if live_task_status != "active":
+        if not is_live_task_active(live_task):
 
             st.error(
-                "🚫 This task is currently **INACTIVE** and cannot receive a new Daily Review."
+                "🚫 This task is not ACTIVE in 03_Task_Master. New Daily Review submission is blocked."
             )
 
             st.stop()
+
+        # Always use the fresh Task Master values after the live check.
+        selected_task = live_task
 
 
         assignment_id = normalize(
@@ -1141,6 +1233,11 @@ if current_role == ROLE_COORDINATOR:
                 key="daily_review_date_input"
             )
 
+
+        # HARD RULE: Daily reviews can only use the current India date.
+        if frequency == "Daily":
+
+            review_date = today
 
         # --------------------------------------------------
         # CHECK EXPECTED DATE
@@ -1339,25 +1436,26 @@ if current_role == ROLE_COORDINATOR:
                     st.stop()
 
 
-                # Final live status check immediately before writing to Google Sheets.
-                live_task = TaskService.get_task(
+                # FINAL HARD RULE immediately before writing:
+                # fresh Task Master read + explicit ACTIVE check.
+                live_task = get_live_task_from_sheet(
                     selected_task_id
-                ) or selected_task
+                )
 
-                live_task_status = normalize_status(
-                    get_value(
-                        live_task,
-                        "Status"
-                    )
-                ) or "active"
-
-                if live_task_status != "active":
+                if not is_live_task_active(live_task):
 
                     st.error(
-                        "🚫 This task is currently **INACTIVE**. Submission has been blocked."
+                        "🚫 This task is not ACTIVE in 03_Task_Master. Submission has been blocked."
                     )
 
                     st.stop()
+
+                # Daily tasks are forced to today's India date even if any
+                # stale widget/session state exists.
+                if frequency == "Daily":
+
+                    review_date = today
+                    review_date_text = today.strftime("%d-%m-%Y")
 
 
                 if assigned_date:
