@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
 import calendar
+import time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -84,6 +85,8 @@ current_user_id = str(
 # India local date is used for Daily Review validation.
 INDIA_TZ = ZoneInfo("Asia/Kolkata")
 today = datetime.now(INDIA_TZ).date()
+DIAGNOSTIC_VERSION = "DIAGNOSTIC v18"
+_perf = {}
 
 
 # ==========================================================
@@ -94,7 +97,7 @@ st.title(
     "📝 Daily Review"
 )
 
-st.caption("Policy: TODAY-ONLY + ACTIVE-TASK-ONLY | HARD RULES v17")
+st.caption("Policy: TODAY-ONLY + ACTIVE-TASK-ONLY | DIAGNOSTIC v18")
 
 st.caption(
     f"User: {current_username} | Role: {current_role}"
@@ -201,7 +204,10 @@ def get_live_task_from_sheet(task_id):
 
     try:
 
+        _t0 = time.perf_counter()
         fresh_tasks = read_all(TASK_MASTER) or []
+        _perf["Live Task Master reads"] = _perf.get("Live Task Master reads", 0.0) + (time.perf_counter() - _t0)
+        _perf["Live Task Master read count"] = _perf.get("Live Task Master read count", 0) + 1
 
     except Exception:
 
@@ -361,10 +367,12 @@ def normalize_frequency(
 
 try:
 
+    _t0 = time.perf_counter()
     all_tasks = (
         TaskService
         .get_all_tasks()
     )
+    _perf["Task Master service read"] = time.perf_counter() - _t0
 
 except Exception:
 
@@ -373,10 +381,12 @@ except Exception:
 
 try:
 
+    _t0 = time.perf_counter()
     all_assignments = (
         TaskAssignmentService
         .get_all_assignments()
     )
+    _perf["Assignment service read"] = time.perf_counter() - _t0
 
 except Exception:
 
@@ -385,9 +395,11 @@ except Exception:
 
 try:
 
+    _t0 = time.perf_counter()
     all_reviews = read_all(
         DAILY_REVIEW
     )
+    _perf["Daily Review read"] = time.perf_counter() - _t0
 
 except Exception:
 
@@ -411,6 +423,26 @@ all_reviews = (
     or []
 )
 
+
+# ==========================================================
+# DIAGNOSTIC PANEL
+# ==========================================================
+
+with st.expander("🔎 Performance / Live Status Diagnostic", expanded=True):
+
+    st.write(f"**Running code:** {DIAGNOSTIC_VERSION}")
+    st.write(f"**Today (India):** {today.strftime('%d-%m-%Y')}")
+    st.write(f"**Tasks loaded:** {len(all_tasks)}")
+    st.write(f"**Assignments loaded:** {len(all_assignments)}")
+    st.write(f"**Reviews loaded:** {len(all_reviews)}")
+
+    if _perf:
+        perf_rows = []
+        for name, seconds in _perf.items():
+            if isinstance(seconds, (int, float)):
+                perf_rows.append({"Operation": name, "Time (sec)": round(seconds, 3)})
+        if perf_rows:
+            st.dataframe(pd.DataFrame(perf_rows), use_container_width=True, hide_index=True)
 
 # ==========================================================
 # TASK LOOKUP
@@ -558,6 +590,32 @@ for assignment in assigned_records:
         }
     )
 
+
+# ==========================================================
+# LIVE TASK STATUS DIAGNOSTIC
+# ==========================================================
+
+if current_role == ROLE_COORDINATOR:
+
+    with st.expander("🧪 Coordinator Task Status Check", expanded=False):
+
+        diagnostic_rows = []
+
+        for assignment in assigned_records:
+            task_id = normalize(get_value(assignment, "Task_ID", "Task_Id"))
+            live_task = get_live_task_from_sheet(task_id)
+            diagnostic_rows.append({
+                "Task_ID": task_id,
+                "Task_Name": normalize(get_value_robust(live_task, "Task_Name", "Task", "Name")),
+                "Frequency": normalize(get_value_robust(live_task, "Frequency")),
+                "Status_From_Task_Master": normalize(get_value_robust(live_task, "Status", "Task_Status", "Task Status")),
+                "Allowed": "YES" if is_live_task_active(live_task) else "NO"
+            })
+
+        if diagnostic_rows:
+            st.dataframe(pd.DataFrame(diagnostic_rows), use_container_width=True, hide_index=True)
+        else:
+            st.info("No assignments found for this Coordinator.")
 
 # ==========================================================
 # BUILD SUBMISSION LOOKUP
