@@ -2,7 +2,6 @@ import streamlit as st
 import pandas as pd
 from datetime import date, datetime, timedelta
 import calendar
-import time
 from uuid import uuid4
 from zoneinfo import ZoneInfo
 
@@ -85,8 +84,7 @@ current_user_id = str(
 # India local date is used for Daily Review validation.
 INDIA_TZ = ZoneInfo("Asia/Kolkata")
 today = datetime.now(INDIA_TZ).date()
-DIAGNOSTIC_VERSION = "DIAGNOSTIC v18"
-_perf = {}
+PERFORMANCE_VERSION = "PERFORMANCE OPTIMIZED v20"
 
 
 # ==========================================================
@@ -97,7 +95,7 @@ st.title(
     "📝 Daily Review"
 )
 
-st.caption("Policy: TODAY-ONLY + ACTIVE-TASK-ONLY | DIAGNOSTIC v18")
+st.caption("Policy: TODAY-ONLY + ACTIVE-TASK-ONLY | PERFORMANCE OPTIMIZED v20")
 
 st.caption(
     f"User: {current_username} | Role: {current_role}"
@@ -203,11 +201,7 @@ def get_live_task_from_sheet(task_id):
         return None
 
     try:
-
-        _t0 = time.perf_counter()
         fresh_tasks = read_all(TASK_MASTER) or []
-        _perf["Live Task Master reads"] = _perf.get("Live Task Master reads", 0.0) + (time.perf_counter() - _t0)
-        _perf["Live Task Master read count"] = _perf.get("Live Task Master read count", 0) + 1
 
     except Exception:
 
@@ -367,12 +361,7 @@ def normalize_frequency(
 
 try:
 
-    _t0 = time.perf_counter()
-    all_tasks = (
-        TaskService
-        .get_all_tasks()
-    )
-    _perf["Task Master service read"] = time.perf_counter() - _t0
+    all_tasks = TaskService.get_all_tasks()
 
 except Exception:
 
@@ -381,12 +370,7 @@ except Exception:
 
 try:
 
-    _t0 = time.perf_counter()
-    all_assignments = (
-        TaskAssignmentService
-        .get_all_assignments()
-    )
-    _perf["Assignment service read"] = time.perf_counter() - _t0
+    all_assignments = TaskAssignmentService.get_all_assignments()
 
 except Exception:
 
@@ -395,54 +379,27 @@ except Exception:
 
 try:
 
-    _t0 = time.perf_counter()
-    all_reviews = read_all(
-        DAILY_REVIEW
-    )
-    _perf["Daily Review read"] = time.perf_counter() - _t0
+    all_reviews = read_all(DAILY_REVIEW)
 
 except Exception:
 
     all_reviews = []
 
 
-all_tasks = (
-    all_tasks
-    or []
-)
-
-
-all_assignments = (
-    all_assignments
-    or []
-)
-
-
-all_reviews = (
-    all_reviews
-    or []
-)
+all_tasks = all_tasks or []
+all_assignments = all_assignments or []
+all_reviews = all_reviews or []
 
 
 # ==========================================================
-# DIAGNOSTIC PANEL
+# PERFORMANCE STATUS
 # ==========================================================
 
-with st.expander("🔎 Performance / Live Status Diagnostic", expanded=True):
+st.caption(
+    "Performance optimized: core Google Sheet data is read once per page run; "
+    "a fresh Task Master check is used only at final submission."
+)
 
-    st.write(f"**Running code:** {DIAGNOSTIC_VERSION}")
-    st.write(f"**Today (India):** {today.strftime('%d-%m-%Y')}")
-    st.write(f"**Tasks loaded:** {len(all_tasks)}")
-    st.write(f"**Assignments loaded:** {len(all_assignments)}")
-    st.write(f"**Reviews loaded:** {len(all_reviews)}")
-
-    if _perf:
-        perf_rows = []
-        for name, seconds in _perf.items():
-            if isinstance(seconds, (int, float)):
-                perf_rows.append({"Operation": name, "Time (sec)": round(seconds, 3)})
-        if perf_rows:
-            st.dataframe(pd.DataFrame(perf_rows), use_container_width=True, hide_index=True)
 
 # ==========================================================
 # TASK LOOKUP
@@ -560,16 +517,11 @@ for assignment in assigned_records:
         )
 
 
-    # A task must exist in the live Task Master and must be
-    # explicitly ACTIVE. Missing/unknown status is treated as inactive.
-    live_task_for_list = get_live_task_from_sheet(task_id)
-
-    if not is_live_task_active(live_task_for_list):
+    # Task Master was already read once for this page run.
+    # Only explicitly ACTIVE tasks are included.
+    if not is_live_task_active(task):
 
         continue
-
-    # Use the fresh Task Master record for all new-review decisions.
-    task = live_task_for_list
 
     task_name = normalize(
         get_value_robust(
@@ -590,32 +542,6 @@ for assignment in assigned_records:
         }
     )
 
-
-# ==========================================================
-# LIVE TASK STATUS DIAGNOSTIC
-# ==========================================================
-
-if current_role == ROLE_COORDINATOR:
-
-    with st.expander("🧪 Coordinator Task Status Check", expanded=False):
-
-        diagnostic_rows = []
-
-        for assignment in assigned_records:
-            task_id = normalize(get_value(assignment, "Task_ID", "Task_Id"))
-            live_task = get_live_task_from_sheet(task_id)
-            diagnostic_rows.append({
-                "Task_ID": task_id,
-                "Task_Name": normalize(get_value_robust(live_task, "Task_Name", "Task", "Name")),
-                "Frequency": normalize(get_value_robust(live_task, "Frequency")),
-                "Status_From_Task_Master": normalize(get_value_robust(live_task, "Status", "Task_Status", "Task Status")),
-                "Allowed": "YES" if is_live_task_active(live_task) else "NO"
-            })
-
-        if diagnostic_rows:
-            st.dataframe(pd.DataFrame(diagnostic_rows), use_container_width=True, hide_index=True)
-        else:
-            st.info("No assignments found for this Coordinator.")
 
 # ==========================================================
 # BUILD SUBMISSION LOOKUP
@@ -1048,16 +974,9 @@ if current_role == ROLE_COORDINATOR:
 
     else:
 
-        # HARD RULE v19: rebuild dropdown from ONLY currently ACTIVE tasks.
-        # The widget key is versioned so Streamlit cannot retain an older
-        # inactive-task selection from a previous session state.
-        active_dropdown_tasks = []
-
-        for item in assigned_tasks:
-            fresh_task = get_live_task_from_sheet(item["task_id"])
-            if is_live_task_active(fresh_task):
-                item["task"] = fresh_task
-                active_dropdown_tasks.append(item)
+        # HARD RULE v20: assigned_tasks already contains ONLY ACTIVE tasks.
+        # No repeated Google Sheet reads are needed to build the dropdown.
+        active_dropdown_tasks = assigned_tasks
 
         task_options = {}
 
@@ -1203,22 +1122,9 @@ if current_role == ROLE_COORDINATOR:
         )
 
 
-        # HARD RULE: read Task Master directly from Google Sheets.
-        # Never fall back to the stale selected task and never assume ACTIVE.
-        live_task = get_live_task_from_sheet(
-            selected_task_id
-        )
-
-        if not is_live_task_active(live_task):
-
-            st.error(
-                "🚫 This task is not ACTIVE in 03_Task_Master. New Daily Review submission is blocked."
-            )
-
-            st.stop()
-
-        # Always use the fresh Task Master values after the live check.
-        selected_task = live_task
+        # Task status was checked when the active task list was built.
+        # A final fresh Task Master check is performed immediately before saving.
+        selected_task = selected_item["task"]
 
 
         assignment_id = normalize(
@@ -1508,7 +1414,7 @@ if current_role == ROLE_COORDINATOR:
 
 
                 # FINAL HARD RULE immediately before writing:
-                # fresh Task Master read + explicit ACTIVE check.
+                # one fresh Task Master read + explicit ACTIVE check.
                 live_task = get_live_task_from_sheet(
                     selected_task_id
                 )
@@ -1520,6 +1426,11 @@ if current_role == ROLE_COORDINATOR:
                     )
 
                     st.stop()
+
+                # Refresh frequency from the final live Task Master record.
+                frequency = normalize_frequency(
+                    get_value_robust(live_task, "Frequency")
+                )
 
                 # Daily tasks are forced to today's India date even if any
                 # stale widget/session state exists.
