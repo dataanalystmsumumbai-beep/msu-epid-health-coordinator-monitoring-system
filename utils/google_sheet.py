@@ -47,8 +47,12 @@ def get_spreadsheet():
 
 # ==========================================================
 # GET WORKSHEET
+# Worksheet handles are cached; sheet DATA is not cached.
+# This reduces repeated worksheet lookup requests without making
+# ACTIVE/INACTIVE or review data stale.
 # ==========================================================
 
+@st.cache_resource
 def get_worksheet(
     worksheet_name
 ):
