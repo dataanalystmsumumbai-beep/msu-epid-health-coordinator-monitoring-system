@@ -1048,11 +1048,22 @@ if current_role == ROLE_COORDINATOR:
 
     else:
 
+        # HARD RULE v19: rebuild dropdown from ONLY currently ACTIVE tasks.
+        # The widget key is versioned so Streamlit cannot retain an older
+        # inactive-task selection from a previous session state.
+        active_dropdown_tasks = []
+
+        for item in assigned_tasks:
+            fresh_task = get_live_task_from_sheet(item["task_id"])
+            if is_live_task_active(fresh_task):
+                item["task"] = fresh_task
+                active_dropdown_tasks.append(item)
+
         task_options = {}
 
 
         for index, item in enumerate(
-            assigned_tasks
+            active_dropdown_tasks
         ):
 
             assignment = item[
@@ -1140,6 +1151,8 @@ if current_role == ROLE_COORDINATOR:
             ] = item
 
 
+        st.caption("🔒 Only ACTIVE tasks are available for new Daily Review submission.")
+
         selected_key = st.selectbox(
             "Select Assigned Task",
             list(
@@ -1153,7 +1166,7 @@ if current_role == ROLE_COORDINATOR:
                     f" | "
                     f"{get_value(task_options[key]['assignment'], 'Assignment_ID', 'Assignment_Id', 'ID')}"
                 ),
-            key="daily_review_task_selector"
+            key="daily_review_task_selector_v19"
         )
 
 
