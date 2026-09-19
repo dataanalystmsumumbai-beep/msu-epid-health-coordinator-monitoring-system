@@ -1,5 +1,8 @@
 import streamlit as st
+import pandas as pd
+
 from datetime import datetime
+from zoneinfo import ZoneInfo
 
 from core.navigation import require_login
 
@@ -7,18 +10,17 @@ from config.config import (
     ROLE_DEVELOPER,
     ROLE_ADMIN,
     ROLE_COORDINATOR,
+    NOTIFICATIONS,
 )
 
 from services.task_assignment_service import (
     TaskAssignmentService
 )
 
-try:
-    from services.daily_review_service import (
-        DailyReviewService
-    )
-except Exception:
-    DailyReviewService = None
+from utils.google_sheet import (
+    read_all,
+    update_value,
+)
 
 
 # ==========================================================
@@ -44,27 +46,50 @@ require_login([
 
 
 # ==========================================================
+# INDIA TIMEZONE
+# ==========================================================
+
+INDIA_TZ = ZoneInfo(
+    "Asia/Kolkata"
+)
+
+
+# ==========================================================
 # SESSION
 # ==========================================================
 
-current_role = str(
-    st.session_state.get(
-        "role",
-        ""
-    )
-).strip()
+current_user = st.session_state.get(
+    "user",
+    {}
+)
 
 current_user_id = str(
     st.session_state.get(
         "user_id",
-        ""
+        current_user.get(
+            "User_ID",
+            ""
+        )
     )
 ).strip()
 
 current_username = str(
     st.session_state.get(
         "username",
-        ""
+        current_user.get(
+            "Username",
+            ""
+        )
+    )
+).strip()
+
+current_role = str(
+    st.session_state.get(
+        "role",
+        current_user.get(
+            "Role",
+            ""
+        )
     )
 ).strip()
 
@@ -78,10 +103,15 @@ def clean(value):
     if value is None:
         return ""
 
-    return str(value).strip()
+    return str(
+        value
+    ).strip()
 
 
-def get_value(row, *keys):
+def get_value(
+    row,
+    *keys
+):
 
     if not row:
         return ""
@@ -103,7 +133,9 @@ def get_value(row, *keys):
     return ""
 
 
-def normalize_status(status):
+def normalize_status(
+    status
+):
 
     status = clean(
         status
@@ -134,17 +166,25 @@ def normalize_status(status):
 
         return "Pending"
 
-    return clean(status).title()
+    return clean(
+        status
+    ).title()
 
 
-def load_assignments():
+def safe_read(
+    sheet_name
+):
 
     try:
 
+        data = read_all(
+            sheet_name
+        )
+
         return (
-            TaskAssignmentService
-            .get_all_assignments()
-            or []
+            data
+            if data
+            else []
         )
 
     except Exception:
@@ -152,62 +192,80 @@ def load_assignments():
         return []
 
 
-def load_reviews():
+# ==========================================================
+# LOAD CURRENT DATA
+# ==========================================================
 
-    if DailyReviewService is None:
-        return []
+assignments = []
+
+try:
+
+    assignments = (
+        TaskAssignmentService
+        .get_all_assignments()
+        or []
+    )
+
+except Exception:
+
+    assignments = []
+
+
+# ==========================================================
+# LOAD DAILY REVIEWS
+# ==========================================================
+
+reviews = safe_read(
+    "06_Daily_Review"
+)
+
+# Fallback for projects where the configured
+# Daily Review constant is different.
+
+if not reviews:
 
     try:
 
-        if hasattr(
-            DailyReviewService,
-            "get_all_reviews"
-        ):
+        from config.config import DAILY_REVIEW
 
-            return (
-                DailyReviewService
-                .get_all_reviews()
-                or []
-            )
-
-        if hasattr(
-            DailyReviewService,
-            "get_all"
-        ):
-
-            return (
-                DailyReviewService
-                .get_all()
-                or []
-            )
-
-        return []
+        reviews = safe_read(
+            DAILY_REVIEW
+        )
 
     except Exception:
 
-        return []
+        reviews = []
 
 
 # ==========================================================
-# LOAD DATA
+# LOAD PERSISTENT NOTIFICATIONS
 # ==========================================================
 
-assignments = load_assignments()
-
-reviews = load_reviews()
+persistent_notifications = safe_read(
+    NOTIFICATIONS
+)
 
 
 # ==========================================================
-# ROLE FILTER
+# ROLE FILTER FOR DYNAMIC ALERTS
 # ==========================================================
+
+dynamic_assignments = list(
+    assignments
+)
+
+dynamic_reviews = list(
+    reviews
+)
+
 
 if current_role.lower() == "coordinator":
 
-    assignments = [
+    dynamic_assignments = [
 
         assignment
 
-        for assignment in assignments
+        for assignment in dynamic_assignments
 
         if get_value(
             assignment,
@@ -219,11 +277,11 @@ if current_role.lower() == "coordinator":
     ]
 
 
-    reviews = [
+    dynamic_reviews = [
 
         review
 
-        for review in reviews
+        for review in dynamic_reviews
 
         if get_value(
             review,
@@ -236,17 +294,17 @@ if current_role.lower() == "coordinator":
 
 
 # ==========================================================
-# BUILD NOTIFICATIONS
+# BUILD DYNAMIC NOTIFICATIONS
 # ==========================================================
 
-notifications = []
+dynamic_notifications = []
 
 
 # ==========================================================
 # TASK NOTIFICATIONS
 # ==========================================================
 
-for assignment in assignments:
+for assignment in dynamic_assignments:
 
     status = normalize_status(
         get_value(
@@ -284,15 +342,10 @@ for assignment in assignments:
         "Priority"
     )
 
-    remarks = get_value(
-        assignment,
-        "Remarks"
-    )
-
 
     if status == "Pending":
 
-        notifications.append(
+        dynamic_notifications.append(
             {
                 "type": "task",
                 "icon": "⏳",
@@ -300,8 +353,10 @@ for assignment in assignments:
                 "message":
                     f"Task {task_id or assignment_id} "
                     f"is currently pending.",
-                "priority": priority or "Medium",
-                "date": assigned_date,
+                "priority":
+                    priority or "Medium",
+                "date":
+                    assigned_date,
                 "sort": 1
             }
         )
@@ -309,7 +364,7 @@ for assignment in assignments:
 
     elif status == "In Progress":
 
-        notifications.append(
+        dynamic_notifications.append(
             {
                 "type": "task",
                 "icon": "🔄",
@@ -317,8 +372,10 @@ for assignment in assignments:
                 "message":
                     f"Task {task_id or assignment_id} "
                     f"is currently in progress.",
-                "priority": priority or "Medium",
-                "date": assigned_date,
+                "priority":
+                    priority or "Medium",
+                "date":
+                    assigned_date,
                 "sort": 2
             }
         )
@@ -326,7 +383,7 @@ for assignment in assignments:
 
     if due_date:
 
-        notifications.append(
+        dynamic_notifications.append(
             {
                 "type": "deadline",
                 "icon": "📅",
@@ -334,8 +391,10 @@ for assignment in assignments:
                 "message":
                     f"Task {task_id or assignment_id} "
                     f"has due date {due_date}.",
-                "priority": priority or "Medium",
-                "date": due_date,
+                "priority":
+                    priority or "Medium",
+                "date":
+                    due_date,
                 "sort": 3
             }
         )
@@ -347,7 +406,7 @@ for assignment in assignments:
         "urgent"
     ]:
 
-        notifications.append(
+        dynamic_notifications.append(
             {
                 "type": "priority",
                 "icon": "🚨",
@@ -355,8 +414,10 @@ for assignment in assignments:
                 "message":
                     f"Task {task_id or assignment_id} "
                     f"has {priority} priority.",
-                "priority": priority,
-                "date": assigned_date,
+                "priority":
+                    priority,
+                "date":
+                    assigned_date,
                 "sort": 0
             }
         )
@@ -366,7 +427,7 @@ for assignment in assignments:
 # REVIEW NOTIFICATIONS
 # ==========================================================
 
-for review in reviews:
+for review in dynamic_reviews:
 
     review_status = normalize_status(
         get_value(
@@ -389,24 +450,10 @@ for review in reviews:
         "Date"
     )
 
-    progress = get_value(
-        review,
-        "Progress",
-        "Progress_Update",
-        "Update"
-    )
-
-    remarks = get_value(
-        review,
-        "Remarks",
-        "Comment",
-        "Comments"
-    )
-
 
     if review_status == "Completed":
 
-        notifications.append(
+        dynamic_notifications.append(
             {
                 "type": "review",
                 "icon": "✅",
@@ -415,7 +462,8 @@ for review in reviews:
                     f"Daily Review submitted for "
                     f"Task {task_id}.",
                 "priority": "Normal",
-                "date": review_date,
+                "date":
+                    review_date,
                 "sort": 1
             }
         )
@@ -423,7 +471,7 @@ for review in reviews:
 
     elif review_status == "In Progress":
 
-        notifications.append(
+        dynamic_notifications.append(
             {
                 "type": "review",
                 "icon": "🔄",
@@ -432,7 +480,8 @@ for review in reviews:
                     f"Daily Review for Task {task_id} "
                     f"is marked In Progress.",
                 "priority": "Normal",
-                "date": review_date,
+                "date":
+                    review_date,
                 "sort": 2
             }
         )
@@ -440,7 +489,7 @@ for review in reviews:
 
     elif review_status == "Pending":
 
-        notifications.append(
+        dynamic_notifications.append(
             {
                 "type": "review",
                 "icon": "⚠️",
@@ -449,28 +498,56 @@ for review in reviews:
                     f"Daily Review for Task {task_id} "
                     f"is still pending.",
                 "priority": "High",
-                "date": review_date,
+                "date":
+                    review_date,
                 "sort": 0
             }
         )
 
 
 # ==========================================================
-# SORT
+# PERSISTENT USER NOTIFICATIONS
 # ==========================================================
 
-notifications.sort(
-    key=lambda x: (
-        x.get(
-            "sort",
-            99
-        ),
-        x.get(
-            "date",
-            ""
-        )
+user_notifications = []
+
+
+for index, notification in enumerate(
+    persistent_notifications
+):
+
+    recipient_id = get_value(
+        notification,
+        "Recipient_ID",
+        "Recipient_Id"
     )
-)
+
+    if current_role.lower() in [
+        "admin",
+        "developer"
+    ]:
+
+        visible = True
+
+    else:
+
+        visible = (
+            recipient_id
+            == current_user_id
+        )
+
+
+    if not visible:
+
+        continue
+
+
+    user_notifications.append(
+        {
+            "sheet_row": index + 2,
+            "notification": notification
+        }
+    )
 
 
 # ==========================================================
@@ -482,23 +559,51 @@ st.title(
 )
 
 st.caption(
-    f"User: {current_username} | Role: {current_role}"
+    f"User: {current_username} | "
+    f"Role: {current_role}"
 )
 
 st.divider()
 
 
 # ==========================================================
-# METRICS
+# PERSISTENT NOTIFICATION SUMMARY
 # ==========================================================
 
-total_notifications = len(
-    notifications
+persistent_total = len(
+    user_notifications
+)
+
+persistent_unread = sum(
+    1
+    for item in user_notifications
+
+    if get_value(
+        item["notification"],
+        "Status"
+    ).upper()
+    == "UNREAD"
+)
+
+persistent_read = (
+    persistent_total
+    - persistent_unread
+)
+
+
+# ==========================================================
+# DYNAMIC SUMMARY
+# ==========================================================
+
+dynamic_total = len(
+    dynamic_notifications
 )
 
 high_priority = sum(
     1
-    for notification in notifications
+    for notification
+    in dynamic_notifications
+
     if notification.get(
         "priority",
         ""
@@ -510,28 +615,10 @@ high_priority = sum(
     ]
 )
 
-task_notifications = sum(
-    1
-    for notification in notifications
-    if notification.get(
-        "type"
-    )
-    in [
-        "task",
-        "deadline",
-        "priority"
-    ]
-)
 
-review_notifications = sum(
-    1
-    for notification in notifications
-    if notification.get(
-        "type"
-    )
-    == "review"
-)
-
+# ==========================================================
+# METRICS
+# ==========================================================
 
 c1, c2, c3, c4 = st.columns(4)
 
@@ -539,12 +626,28 @@ c1, c2, c3, c4 = st.columns(4)
 with c1:
 
     st.metric(
-        "🔔 Total",
-        total_notifications
+        "🔔 Notifications",
+        persistent_total
     )
 
 
 with c2:
+
+    st.metric(
+        "🟠 Unread",
+        persistent_unread
+    )
+
+
+with c3:
+
+    st.metric(
+        "📢 Live Alerts",
+        dynamic_total
+    )
+
+
+with c4:
 
     st.metric(
         "🚨 High Priority",
@@ -552,35 +655,254 @@ with c2:
     )
 
 
-with c3:
+st.divider()
 
-    st.metric(
-        "📋 Task Alerts",
-        task_notifications
+
+# ==========================================================
+# MARK ALL AS READ
+# ==========================================================
+
+if persistent_unread > 0:
+
+    if st.button(
+        "✓ Mark All Notifications as Read",
+        use_container_width=True,
+        key="mark_all_notifications_read"
+    ):
+
+        updated = 0
+
+        for item in user_notifications:
+
+            notification = item[
+                "notification"
+            ]
+
+            row_number = item[
+                "sheet_row"
+            ]
+
+            status = get_value(
+                notification,
+                "Status"
+            ).upper()
+
+            if status != "UNREAD":
+
+                continue
+
+            try:
+
+                update_value(
+                    NOTIFICATIONS,
+                    row_number,
+                    6,
+                    "READ"
+                )
+
+                updated += 1
+
+            except Exception:
+
+                pass
+
+
+        st.success(
+            f"{updated} notification(s) "
+            "marked as read."
+        )
+
+        st.rerun()
+
+
+# ==========================================================
+# PERSISTENT NOTIFICATIONS
+# ==========================================================
+
+st.subheader(
+    "📬 My Notifications"
+)
+
+
+if not user_notifications:
+
+    st.info(
+        "No persistent notifications found."
     )
 
+else:
 
-with c4:
+    for item in reversed(
+        user_notifications
+    ):
 
-    st.metric(
-        "📝 Review Alerts",
-        review_notifications
-    )
+        notification = item[
+            "notification"
+        ]
+
+        row_number = item[
+            "sheet_row"
+        ]
+
+        notification_id = get_value(
+            notification,
+            "Notification_ID",
+            "Notification_Id"
+        )
+
+        title = get_value(
+            notification,
+            "Title"
+        )
+
+        message = get_value(
+            notification,
+            "Message"
+        )
+
+        notification_type = get_value(
+            notification,
+            "Type"
+        )
+
+        status = get_value(
+            notification,
+            "Status"
+        ).upper()
+
+        created_at = get_value(
+            notification,
+            "Created_At",
+            "Created At"
+        )
+
+
+        is_unread = (
+            status == "UNREAD"
+        )
+
+
+        if is_unread:
+
+            icon = "🟠"
+
+        else:
+
+            icon = "🟢"
+
+
+        with st.container(
+            border=True
+        ):
+
+            left, right = st.columns(
+                [7, 1]
+            )
+
+
+            with left:
+
+                st.markdown(
+                    f"### {icon} {title or 'Notification'}"
+                )
+
+                if message:
+
+                    st.write(
+                        message
+                    )
+
+                meta = []
+
+                if notification_type:
+
+                    meta.append(
+                        f"Type: {notification_type}"
+                    )
+
+                if created_at:
+
+                    meta.append(
+                        f"Created: {created_at}"
+                    )
+
+                if meta:
+
+                    st.caption(
+                        " | ".join(meta)
+                    )
+
+
+            with right:
+
+                if is_unread:
+
+                    st.caption(
+                        "UNREAD"
+                    )
+
+                    if st.button(
+                        "✓ Read",
+                        key=(
+                            f"read_notification_"
+                            f"{row_number}_"
+                            f"{notification_id}"
+                        ),
+                        use_container_width=True,
+                    ):
+
+                        try:
+
+                            update_value(
+                                NOTIFICATIONS,
+                                row_number,
+                                6,
+                                "READ"
+                            )
+
+                            st.success(
+                                "Marked as read."
+                            )
+
+                            st.rerun()
+
+                        except Exception as e:
+
+                            st.error(
+                                f"Unable to update: {e}"
+                            )
+
+                else:
+
+                    st.caption(
+                        "READ"
+                    )
 
 
 st.divider()
 
 
 # ==========================================================
-# FILTER
+# LIVE SYSTEM ALERTS
 # ==========================================================
 
 st.subheader(
-    "🔎 Notification Filter"
+    "📢 Live System Alerts"
+)
+
+st.caption(
+    "These alerts are generated from current "
+    "task assignments and Daily Review records."
 )
 
 
-filter_col1, filter_col2 = st.columns(2)
+# ==========================================================
+# FILTERS
+# ==========================================================
+
+filter_col1, filter_col2 = st.columns(
+    2
+)
 
 
 with filter_col1:
@@ -594,7 +916,7 @@ with filter_col1:
             "Priority",
             "Review"
         ],
-        key="notification_type_filter"
+        key="live_notification_type_filter"
     )
 
 
@@ -611,14 +933,19 @@ with filter_col2:
             "Normal",
             "Low"
         ],
-        key="notification_priority_filter"
+        key="live_notification_priority_filter"
     )
 
 
-filtered_notifications = []
+# ==========================================================
+# APPLY FILTERS
+# ==========================================================
+
+filtered_dynamic = []
 
 
-for notification in notifications:
+for notification
+in dynamic_notifications:
 
     ntype = notification.get(
         "type",
@@ -663,36 +990,52 @@ for notification in notifications:
 
     if priority_filter != "All":
 
-        if priority.lower() != priority_filter.lower():
+        if (
+            priority.lower()
+            !=
+            priority_filter.lower()
+        ):
 
             continue
 
 
-    filtered_notifications.append(
+    filtered_dynamic.append(
         notification
     )
 
 
 # ==========================================================
-# DISPLAY
+# SORT
 # ==========================================================
 
-st.subheader(
-    "📢 Notifications"
+filtered_dynamic.sort(
+    key=lambda x: (
+        x.get(
+            "sort",
+            99
+        ),
+        x.get(
+            "date",
+            ""
+        )
+    )
 )
 
 
-if not filtered_notifications:
+# ==========================================================
+# DISPLAY LIVE ALERTS
+# ==========================================================
+
+if not filtered_dynamic:
 
     st.success(
-        "🎉 No notifications available."
+        "🎉 No live alerts available."
     )
 
 else:
 
-    for index, notification in enumerate(
-        filtered_notifications
-    ):
+    for notification
+    in filtered_dynamic:
 
         icon = notification.get(
             "icon",
@@ -714,7 +1057,7 @@ else:
             "Normal"
         )
 
-        date = notification.get(
+        alert_date = notification.get(
             "date",
             ""
         )
@@ -724,44 +1067,27 @@ else:
             border=True
         ):
 
-            col1, col2 = st.columns(
-                [
-                    1,
-                    8
-                ]
+            st.markdown(
+                f"### {icon} {title}"
             )
 
+            st.write(
+                message
+            )
 
-            with col1:
+            meta = (
+                f"**Priority:** {priority}"
+            )
 
-                st.markdown(
-                    f"# {icon}"
+            if alert_date:
+
+                meta += (
+                    f" | **Date:** {alert_date}"
                 )
 
-
-            with col2:
-
-                st.markdown(
-                    f"### {title}"
-                )
-
-                st.write(
-                    message
-                )
-
-                meta = (
-                    f"**Priority:** {priority}"
-                )
-
-                if date:
-
-                    meta += (
-                        f"  |  **Date:** {date}"
-                    )
-
-                st.caption(
-                    meta
-                )
+            st.caption(
+                meta
+            )
 
 
 # ==========================================================
@@ -787,5 +1113,6 @@ if st.button(
 st.divider()
 
 st.caption(
-    "Notifications • Coordinator Monitoring & Task Management System"
+    "MSU / EPID Health Coordinator Monitoring System "
+    "| Notifications"
 )
