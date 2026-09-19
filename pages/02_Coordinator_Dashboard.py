@@ -1,142 +1,133 @@
 import streamlit as st
 import pandas as pd
+
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from config.config import (
     ROLE_COORDINATOR,
     TASK_MASTER,
-    DAILY_REVIEW
+    COORDINATOR_TASK_MAP,
+    DAILY_REVIEW,
 )
 
 from utils.google_sheet import read_all
-
 from core.navigation import logout_button
-
-from services.task_assignment_service import (
-    TaskAssignmentService
-)
+from services.task_assignment_service import TaskAssignmentService
 
 
-# ==========================================================
-# PAGE CONFIGURATION
-# ==========================================================
+# ============================================================
+# PAGE CONFIG
+# ============================================================
 
 st.set_page_config(
     page_title="Coordinator Dashboard",
-    page_icon="👨‍⚕️",
-    layout="wide"
+    page_icon="📊",
+    layout="wide",
 )
 
 
-# ==========================================================
+# ============================================================
 # LOGIN CHECK
-# ==========================================================
+# ============================================================
 
-if (
-    "logged_in" not in st.session_state
-    or not st.session_state.logged_in
-):
-
-    st.error(
-        "Please login first."
-    )
-
+if "logged_in" not in st.session_state or not st.session_state.logged_in:
+    st.error("Please login to access the Coordinator Dashboard.")
     st.stop()
 
 
-# ==========================================================
+# ============================================================
 # CURRENT USER
-# ==========================================================
-
-current_user = st.session_state.get(
-    "user",
-    {}
-)
-
-current_role = str(
-    current_user.get(
-        "Role",
-        ""
-    )
-).strip()
-
+# ============================================================
 
 current_user_id = str(
-    current_user.get(
-        "Coordinator_ID",
-        current_user.get(
-            "User_ID",
-            ""
-        )
+    st.session_state.get(
+        "user_id",
+        st.session_state.get("username", "")
     )
 ).strip()
-
 
 current_username = str(
-    current_user.get(
-        "Username",
-        ""
+    st.session_state.get(
+        "username",
+        current_user_id
     )
 ).strip()
 
+current_role = str(
+    st.session_state.get("role", "")
+).strip()
 
-# ==========================================================
+
+# ============================================================
 # ACCESS CONTROL
-# ==========================================================
+# ============================================================
 
 if current_role != ROLE_COORDINATOR:
-
-    st.error(
-        "Coordinator access required."
-    )
-
+    st.error("Access denied. This page is only available to Coordinators.")
     st.stop()
 
+
+# ============================================================
+# SIDEBAR / LOGOUT
+# ============================================================
 
 logout_button()
 
 
-# ==========================================================
-# HEADER
-# ==========================================================
+# ============================================================
+# INDIA TIMEZONE
+# ============================================================
 
-st.title(
-    "👨‍⚕️ Coordinator Dashboard"
-)
+INDIA_TZ = ZoneInfo("Asia/Kolkata")
+
+now_india = datetime.now(INDIA_TZ)
+today = now_india.date()
+
+
+# ============================================================
+# PAGE HEADER
+# ============================================================
+
+st.title("📊 Coordinator Dashboard")
 
 st.caption(
-    f"Welcome, {current_username}"
+    f"Welcome, {current_username} | "
+    f"Today: {today.strftime('%d-%m-%Y')}"
 )
 
-st.divider()
 
-
-# ==========================================================
+# ============================================================
 # SAFE READ
-# ==========================================================
+# ============================================================
 
 def safe_read(sheet_name):
-
     try:
+        data = read_all(sheet_name)
 
-        data = read_all(
-            sheet_name
-        )
+        if data is None:
+            return []
 
-        return data if data else []
+        return data
 
     except Exception:
-
         return []
 
 
-# ==========================================================
-# DATE PARSER
-# ==========================================================
+# ============================================================
+# HELPER FUNCTIONS
+# ============================================================
+
+def normalize_status(value):
+    return str(value).strip().upper()
+
 
 def parse_date(value):
+    """
+    Converts common date formats into Python date.
+    """
 
-    if value is None or value == "":
+    if value is None:
         return None
 
     if isinstance(value, datetime):
@@ -145,478 +136,375 @@ def parse_date(value):
     if isinstance(value, date):
         return value
 
-    text = str(
-        value
-    ).strip()
+    text = str(value).strip()
 
     if not text:
         return None
 
     formats = [
+        "%Y-%m-%d",
         "%d-%m-%Y",
         "%d/%m/%Y",
-        "%Y-%m-%d",
         "%Y/%m/%d",
-        "%d-%m-%y",
-        "%d/%m/%y",
-        "%Y-%m-%d %H:%M:%S",
-        "%d-%m-%Y %H:%M:%S",
-        "%d/%m/%Y %H:%M:%S",
+        "%m/%d/%Y",
+        "%d-%b-%Y",
+        "%d %b %Y",
     ]
 
     for fmt in formats:
-
         try:
-
-            return datetime.strptime(
-                text,
-                fmt
-            ).date()
-
-        except ValueError:
-
-            continue
+            return datetime.strptime(text, fmt).date()
+        except Exception:
+            pass
 
     try:
-
-        parsed = pd.to_datetime(
-            text,
-            dayfirst=True,
-            errors="coerce"
-        )
-
-        if pd.notna(parsed):
-
-            return parsed.date()
-
+        return pd.to_datetime(text, dayfirst=True).date()
     except Exception:
-
-        pass
-
-    return None
+        return None
 
 
-# ==========================================================
-# STATUS HELPERS
-# ==========================================================
+def is_assignment_active(row):
+    """
+    Assignment is considered active unless it is explicitly
+    removed/deleted/inactive.
+    """
 
-def normalize_status(value):
+    status = normalize_status(row.get("Status", ""))
 
-    return str(
-        value or ""
-    ).strip().lower()
+    if status in {
+        "REMOVED",
+        "DELETED",
+        "INACTIVE",
+        "CANCELLED",
+    }:
+        return False
 
-
-def is_assignment_active(assignment):
-
-    status = normalize_status(
-        assignment.get(
-            "Status",
-            ""
-        )
-    )
-
-    return status not in {
-        "removed",
-        "deleted",
-        "inactive"
-    }
+    return True
 
 
 def is_task_active(task):
+    """
+    Only explicit ACTIVE tasks are allowed for Daily Review
+    monitoring.
+    """
 
-    return normalize_status(
-        task.get(
-            "Status",
-            ""
-        )
-    ) == "active"
-
-
-# ==========================================================
-# LOAD DATA
-# ==========================================================
-
-tasks = safe_read(
-    TASK_MASTER
-)
-
-reviews = safe_read(
-    DAILY_REVIEW
-)
+    return normalize_status(task.get("Status", "")) == "ACTIVE"
 
 
-try:
+# ============================================================
+# LOAD MASTER DATA
+# ============================================================
 
-    assignments = (
-        TaskAssignmentService
-        .get_all_assignments()
-    )
-
-except Exception:
-
-    assignments = []
+all_tasks = safe_read(TASK_MASTER)
+all_assignments = safe_read(COORDINATOR_TASK_MAP)
+all_reviews = safe_read(DAILY_REVIEW)
 
 
-if not assignments:
+# ============================================================
+# CONVERT TO DATAFRAMES
+# ============================================================
 
-    assignments = []
+tasks_df = pd.DataFrame(all_tasks)
+assignments_df = pd.DataFrame(all_assignments)
+reviews_df = pd.DataFrame(all_reviews)
 
 
-# ==========================================================
+# ============================================================
 # MY ASSIGNMENTS
-# ==========================================================
+# ============================================================
 
 my_assignments = [
-
-    assignment
-
-    for assignment in assignments
-
+    row
+    for row in all_assignments
     if str(
-        assignment.get(
-            "Coordinator_ID",
-            ""
-        )
-    ).strip()
-    == current_user_id
-
-    and is_assignment_active(
-        assignment
-    )
-
+        row.get("Coordinator_ID", "")
+    ).strip() == current_user_id
+    and is_assignment_active(row)
 ]
 
 
-# ==========================================================
+# ============================================================
 # TASK LOOKUP
-# ==========================================================
+# ============================================================
 
 task_lookup = {}
 
-
-for task in tasks:
+for task in all_tasks:
 
     task_id = str(
-        task.get(
-            "Task_ID",
-            ""
-        )
+        task.get("Task_ID", "")
     ).strip()
 
     if task_id:
-
-        task_lookup[
-            task_id
-        ] = task
+        task_lookup[task_id] = task
 
 
-# ==========================================================
-# TASK STATUS
-# ==========================================================
-
-total_tasks = len(
-    my_assignments
-)
-
-
-completed_tasks = sum(
-
-    1
-
-    for assignment in my_assignments
-
-    if normalize_status(
-        assignment.get(
-            "Status",
-            ""
-        )
-    )
-    == "completed"
-
-)
-
-
-pending_tasks = sum(
-
-    1
-
-    for assignment in my_assignments
-
-    if normalize_status(
-        assignment.get(
-            "Status",
-            ""
-        )
-    )
-    == "pending"
-
-)
-
-
-in_progress_tasks = sum(
-
-    1
-
-    for assignment in my_assignments
-
-    if normalize_status(
-        assignment.get(
-            "Status",
-            ""
-        )
-    )
-    in {
-        "in progress",
-        "in_progress"
-    }
-
-)
-
-
-completion_percentage = (
-
-    completed_tasks
-    / total_tasks
-    * 100
-
-    if total_tasks > 0
-
-    else 0
-
-)
-
-
-# ==========================================================
-# MY REVIEW HISTORY
-# ==========================================================
-
-my_reviews = []
-
-
-for review in reviews:
-
-    review_coordinator = str(
-        review.get(
-            "Coordinator_ID",
-            review.get(
-                "Coordinator_Id",
-                ""
-            )
-        )
-    ).strip()
-
-    if (
-        review_coordinator
-        == current_user_id
-    ):
-
-        my_reviews.append(
-            review
-        )
-
-
-# ==========================================================
+# ============================================================
 # TOP METRICS
-# ==========================================================
+# ============================================================
 
-c1, c2, c3, c4, c5 = st.columns(5)
+assigned_count = len(my_assignments)
 
+completed_count = 0
+pending_count = 0
+in_progress_count = 0
 
-with c1:
+for assignment in my_assignments:
 
-    st.metric(
-        "📋 Assigned",
-        total_tasks
+    status = normalize_status(
+        assignment.get("Status", "")
     )
 
+    if status == "COMPLETED":
+        completed_count += 1
 
-with c2:
+    elif status == "IN PROGRESS":
+        in_progress_count += 1
 
+    elif status in {
+        "PENDING",
+        "ASSIGNED",
+        "NOT STARTED",
+        "",
+    }:
+        pending_count += 1
+
+
+if assigned_count > 0:
+    assignment_completion = (
+        completed_count / assigned_count
+    ) * 100
+else:
+    assignment_completion = 0
+
+
+# ============================================================
+# TOP METRIC CARDS
+# ============================================================
+
+col1, col2, col3, col4, col5 = st.columns(5)
+
+with col1:
+    st.metric(
+        "📌 Assigned",
+        assigned_count
+    )
+
+with col2:
     st.metric(
         "✅ Completed",
-        completed_tasks
+        completed_count
     )
 
-
-with c3:
-
+with col3:
     st.metric(
         "⏳ Pending",
-        pending_tasks
+        pending_count
     )
 
-
-with c4:
-
+with col4:
     st.metric(
         "🔄 In Progress",
-        in_progress_tasks
+        in_progress_count
     )
 
-
-with c5:
-
+with col5:
     st.metric(
         "📈 Completion",
-        f"{completion_percentage:.0f}%"
+        f"{assignment_completion:.1f}%"
     )
 
 
 st.divider()
 
 
-# ==========================================================
-# OVERALL PROGRESS
-# ==========================================================
-
-st.subheader(
-    "📊 Overall Task Progress"
-)
-
-
-st.progress(
-    min(
-        max(
-            completion_percentage / 100,
-            0
-        ),
-        1
-    )
-)
-
-
-st.caption(
-    f"{completion_percentage:.1f}% "
-    "of assigned tasks completed"
-)
-
-
-st.divider()
-
-
-# ==========================================================
+# ============================================================
 # MY ASSIGNED TASKS
-# ==========================================================
+# ============================================================
 
-st.subheader(
-    "📋 My Assigned Tasks"
-)
+st.subheader("📋 My Assigned Tasks")
 
 
-if not my_assignments:
+assigned_display = []
 
-    st.info(
-        "No tasks have been assigned to you."
+for assignment in my_assignments:
+
+    task_id = str(
+        assignment.get("Task_ID", "")
+    ).strip()
+
+    task = task_lookup.get(task_id, {})
+
+    assigned_display.append(
+        {
+            "Assignment ID": assignment.get(
+                "Assignment_ID",
+                ""
+            ),
+            "Task ID": task_id,
+            "Task Name": task.get(
+                "Task_Name",
+                "Not Found"
+            ),
+            "Category": task.get(
+                "Category",
+                ""
+            ),
+            "Frequency": task.get(
+                "Frequency",
+                ""
+            ),
+            "Priority": assignment.get(
+                "Priority",
+                task.get("Priority", "")
+            ),
+            "Assigned Date": assignment.get(
+                "Assigned_Date",
+                ""
+            ),
+            "Due Date": assignment.get(
+                "Due_Date",
+                ""
+            ),
+            "Status": assignment.get(
+                "Status",
+                ""
+            ),
+            "Remarks": assignment.get(
+                "Remarks",
+                ""
+            ),
+        }
+    )
+
+
+if assigned_display:
+
+    assigned_df = pd.DataFrame(
+        assigned_display
+    )
+
+    st.dataframe(
+        assigned_df,
+        use_container_width=True,
+        hide_index=True,
     )
 
 else:
 
-    task_rows = []
+    st.info(
+        "No active task assignments found."
+    )
 
 
-    for assignment in my_assignments:
+st.divider()
+
+
+# ============================================================
+# MY REVIEW HISTORY
+# ============================================================
+
+st.subheader("📝 My Review History")
+
+
+my_reviews = []
+
+for review in all_reviews:
+
+    coordinator_id = str(
+        review.get("Coordinator_ID", "")
+    ).strip()
+
+    username = str(
+        review.get("Username", "")
+    ).strip()
+
+    coordinator_id_alt = str(
+        review.get("Coordinator_Id", "")
+    ).strip()
+
+    if (
+        coordinator_id == current_user_id
+        or coordinator_id_alt == current_user_id
+        or username == current_username
+    ):
+        my_reviews.append(review)
+
+
+if my_reviews:
+
+    history_display = []
+
+    for review in my_reviews:
 
         task_id = str(
-            assignment.get(
-                "Task_ID",
-                ""
-            )
+            review.get("Task_ID", "")
         ).strip()
-
 
         task = task_lookup.get(
             task_id,
             {}
         )
 
-
-        task_name = str(
-            task.get(
-                "Task_Name",
-                task.get(
-                    "Task",
-                    task_id
-                )
-            )
-        ).strip()
-
-
-        task_rows.append(
+        history_display.append(
             {
-
-                "Assignment ID":
-                    assignment.get(
-                        "Assignment_ID",
-                        ""
-                    ),
-
-                "Task":
-                    task_name,
-
-                "Frequency":
-                    task.get(
-                        "Frequency",
-                        ""
-                    ),
-
-                "Assigned Date":
-                    assignment.get(
-                        "Assigned_Date",
-                        ""
-                    ),
-
-                "Due Date":
-                    assignment.get(
-                        "Due_Date",
-                        ""
-                    ),
-
-                "Priority":
-                    assignment.get(
-                        "Priority",
-                        ""
-                    ),
-
-                "Status":
-                    assignment.get(
-                        "Status",
-                        "Pending"
-                    ),
-
-                "Remarks":
-                    assignment.get(
-                        "Remarks",
-                        ""
-                    )
-
+                "Review ID": review.get(
+                    "Review_ID",
+                    ""
+                ),
+                "Date": review.get(
+                    "Date",
+                    ""
+                ),
+                "Task": task.get(
+                    "Task_Name",
+                    task_id
+                ),
+                "Task ID": task_id,
+                "Assignment ID": review.get(
+                    "Assignment_ID",
+                    ""
+                ),
+                "Status": review.get(
+                    "Status",
+                    ""
+                ),
+                "Remarks": review.get(
+                    "Remarks",
+                    ""
+                ),
+                "Submitted At": review.get(
+                    "Submitted_At",
+                    ""
+                ),
             }
         )
 
-
-    task_df = pd.DataFrame(
-        task_rows
+    history_df = pd.DataFrame(
+        history_display
     )
 
-
     st.dataframe(
-        task_df,
+        history_df,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
+    )
+
+else:
+
+    st.info(
+        "No Daily Review history found."
     )
 
 
 st.divider()
 
 
-# ==========================================================
+# ============================================================
 # DAILY REVIEW MONITORING
-# ==========================================================
+# ============================================================
 
-st.subheader(
-    "📅 Daily Review Monitoring"
-)
-
+st.subheader("📅 Daily Review Monitoring")
 
 st.caption(
     "Daily tasks are expected from the assignment date "
@@ -625,105 +513,82 @@ st.caption(
 )
 
 
-# ==========================================================
-# TODAY
-# ==========================================================
-
-today = date.today()
-
-
-# ==========================================================
+# ============================================================
 # ACTIVE DAILY ASSIGNMENTS
-# ==========================================================
+# ============================================================
 
-daily_assignments = []
-
+active_daily_assignments = []
 
 for assignment in my_assignments:
 
     task_id = str(
-        assignment.get(
-            "Task_ID",
-            ""
-        )
+        assignment.get("Task_ID", "")
     ).strip()
-
 
     task = task_lookup.get(
         task_id,
         {}
     )
 
-
     if not task:
-
         continue
 
-
-    # Only ACTIVE tasks
-    if not is_task_active(
-        task
-    ):
-
+    if not is_task_active(task):
         continue
 
-
-    frequency = str(
-        task.get(
-            "Frequency",
-            ""
-        )
-    ).strip().lower()
-
-
-    # Only Daily tasks
-    if frequency != "daily":
-
-        continue
-
-
-    assigned_date = parse_date(
-        assignment.get(
-            "Assigned_Date",
-            ""
-        )
+    frequency = normalize_status(
+        task.get("Frequency", "")
     )
 
-
-    if not assigned_date:
-
+    if frequency != "DAILY":
         continue
 
-
-    daily_assignments.append(
+    active_daily_assignments.append(
         {
             "assignment": assignment,
             "task": task,
-            "task_id": task_id,
-            "assigned_date": assigned_date
         }
     )
 
 
-# ==========================================================
-# EARLIEST DATE
-# ==========================================================
+# ============================================================
+# DATE RANGE
+# ============================================================
 
-if daily_assignments:
+if active_daily_assignments:
 
-    earliest_assignment_date = min(
-        item["assigned_date"]
-        for item in daily_assignments
-    )
+    assignment_dates = []
+
+    for item in active_daily_assignments:
+
+        assignment = item["assignment"]
+
+        assigned_date = parse_date(
+            assignment.get(
+                "Assigned_Date",
+                ""
+            )
+        )
+
+        if assigned_date:
+            assignment_dates.append(
+                assigned_date
+            )
+
+    if assignment_dates:
+
+        earliest_assignment_date = min(
+            assignment_dates
+        )
+
+    else:
+
+        earliest_assignment_date = today
 
 else:
 
     earliest_assignment_date = today
 
-
-# ==========================================================
-# DATE FILTER
-# ==========================================================
 
 default_from_date = max(
     earliest_assignment_date,
@@ -731,52 +596,46 @@ default_from_date = max(
 )
 
 
-f1, f2 = st.columns(2)
+date_col1, date_col2 = st.columns(2)
 
-
-with f1:
+with date_col1:
 
     from_date = st.date_input(
         "From Date",
         value=default_from_date,
         min_value=earliest_assignment_date,
         max_value=today,
-        key="coordinator_monitor_from_final"
+        key="coordinator_monitor_from_date",
     )
 
 
-with f2:
+with date_col2:
 
     to_date = st.date_input(
         "To Date",
         value=today,
         min_value=earliest_assignment_date,
         max_value=today,
-        key="coordinator_monitor_to_final"
+        key="coordinator_monitor_to_date",
     )
 
 
-# ==========================================================
-# DATE VALIDATION
-# ==========================================================
-
 if from_date > to_date:
 
-    st.warning(
-        "From Date cannot be later than To Date."
+    st.error(
+        "From Date cannot be greater than To Date."
     )
 
     st.stop()
 
 
-# ==========================================================
-# SUBMITTED REVIEW SET
-# ==========================================================
+# ============================================================
+# SUBMITTED REVIEW KEYS
+# ============================================================
 
 submitted_review_keys = set()
 
-
-for review in reviews:
+for review in all_reviews:
 
     coordinator_id = str(
         review.get(
@@ -788,11 +647,9 @@ for review in reviews:
         )
     ).strip()
 
-
     if coordinator_id != current_user_id:
 
         continue
-
 
     task_id = str(
         review.get(
@@ -801,7 +658,6 @@ for review in reviews:
         )
     ).strip()
 
-
     review_date = parse_date(
         review.get(
             "Date",
@@ -809,420 +665,485 @@ for review in reviews:
         )
     )
 
-
-    if not task_id:
-
-        continue
-
-
-    if not review_date:
+    if not task_id or not review_date:
 
         continue
-
 
     submitted_review_keys.add(
         (
             coordinator_id,
             task_id,
-            review_date
+            review_date,
         )
     )
 
 
-# ==========================================================
-# BUILD EXPECTED REVIEW ROWS
-# ==========================================================
+# ============================================================
+# BUILD MONITORING DATA
+# ============================================================
 
 monitoring_rows = []
 
-
-for item in daily_assignments:
-
-    assignment = item[
-        "assignment"
-    ]
-
-    task = item[
-        "task"
-    ]
-
-    task_id = item[
-        "task_id"
-    ]
-
-    assigned_date = item[
-        "assigned_date"
-    ]
+# Prevent duplicate expected rows when the same
+# Coordinator + Task + Date appears through multiple
+# assignment records.
+expected_keys = set()
 
 
-    # ------------------------------------------------------
-    # EXPECTED PERIOD
-    # ------------------------------------------------------
+for item in active_daily_assignments:
 
-    expected_start = max(
+    assignment = item["assignment"]
+    task = item["task"]
+
+    task_id = str(
+        task.get(
+            "Task_ID",
+            ""
+        )
+    ).strip()
+
+    task_name = str(
+        task.get(
+            "Task_Name",
+            task_id
+        )
+    ).strip()
+
+    assignment_id = str(
+        assignment.get(
+            "Assignment_ID",
+            ""
+        )
+    ).strip()
+
+    assigned_date = parse_date(
+        assignment.get(
+            "Assigned_Date",
+            ""
+        )
+    )
+
+    due_date = parse_date(
+        assignment.get(
+            "Due_Date",
+            ""
+        )
+    )
+
+    if assigned_date is None:
+
+        assigned_date = from_date
+
+    start_date = max(
         assigned_date,
         from_date
     )
 
-
-    expected_end = min(
+    end_date = min(
         today,
         to_date
     )
 
+    # If a due date exists, do not expect reviews
+    # beyond that assignment's due date.
+    if due_date:
 
-    if expected_start > expected_end:
+        end_date = min(
+            end_date,
+            due_date
+        )
+
+    if start_date > end_date:
 
         continue
 
+    current_date = start_date
 
-    current_date = expected_start
+    while current_date <= end_date:
 
-
-    while current_date <= expected_end:
-
-        review_key = (
+        expected_key = (
             current_user_id,
             task_id,
-            current_date
+            current_date,
         )
 
+        # Avoid double-counting duplicate assignments.
+        if expected_key not in expected_keys:
 
-        submitted = (
-            review_key
-            in submitted_review_keys
-        )
+            expected_keys.add(
+                expected_key
+            )
 
+            submitted = (
+                expected_key
+                in submitted_review_keys
+            )
 
-        monitoring_rows.append(
-            {
+            if submitted:
 
-                "Date":
-                    current_date,
+                status = "Submitted"
 
-                "Task":
-                    task.get(
-                        "Task_Name",
-                        task_id
-                    ),
+            else:
 
-                "Task ID":
-                    task_id,
+                status = "Missing / Not Reporting"
 
-                "Assignment ID":
-                    assignment.get(
-                        "Assignment_ID",
-                        ""
-                    ),
+            monitoring_rows.append(
+                {
+                    "Date": current_date,
+                    "Task ID": task_id,
+                    "Task Name": task_name,
+                    "Assignment ID": assignment_id,
+                    "Status": status,
+                }
+            )
 
-                "Expected":
-                    "Yes",
-
-                "Status":
-                    (
-                        "Submitted"
-                        if submitted
-                        else
-                        "Missing / Not Reporting"
-                    )
-
-            }
-        )
+        current_date += timedelta(days=1)
 
 
-        current_date += timedelta(
-            days=1
-        )
-
-
-# ==========================================================
+# ============================================================
 # MONITORING SUMMARY
-# ==========================================================
+# ============================================================
 
 expected_count = len(
     monitoring_rows
 )
 
-
 submitted_count = sum(
-
     1
-
     for row in monitoring_rows
-
-    if row[
-        "Status"
-    ]
-    == "Submitted"
-
+    if row["Status"] == "Submitted"
 )
-
 
 missing_count = sum(
-
     1
-
     for row in monitoring_rows
-
-    if row[
-        "Status"
-    ]
-    == "Missing / Not Reporting"
-
+    if row["Status"] == "Missing / Not Reporting"
 )
 
 
-review_completion = (
+if expected_count > 0:
 
-    submitted_count
-    / expected_count
-    * 100
+    review_completion = (
+        submitted_count / expected_count
+    ) * 100
 
-    if expected_count > 0
+else:
 
-    else 0
-
-)
+    review_completion = 0
 
 
-# ==========================================================
-# MONITORING METRICS
-# ==========================================================
+# ============================================================
+# MONITORING METRIC CARDS
+# ============================================================
 
-m1, m2, m3, m4 = st.columns(4)
+mon1, mon2, mon3, mon4 = st.columns(4)
 
-
-with m1:
+with mon1:
 
     st.metric(
-        "📋 Expected",
+        "Expected",
         expected_count
     )
 
-
-with m2:
+with mon2:
 
     st.metric(
-        "✅ Submitted",
+        "Submitted",
         submitted_count
     )
 
-
-with m3:
+with mon3:
 
     st.metric(
-        "⚠️ Missing",
+        "Missing",
         missing_count
     )
 
-
-with m4:
+with mon4:
 
     st.metric(
-        "📈 Review Completion",
+        "Review Completion",
         f"{review_completion:.1f}%"
     )
 
 
-# ==========================================================
-# MONITORING PROGRESS
-# ==========================================================
+# ============================================================
+# PROGRESS BAR
+# ============================================================
 
-if expected_count > 0:
-
-    st.progress(
-        min(
-            max(
-                review_completion / 100,
-                0
-            ),
-            1
-        )
+st.progress(
+    min(
+        max(
+            review_completion / 100,
+            0.0
+        ),
+        1.0
     )
-
-
-# ==========================================================
-# MONITORING DETAIL
-# ==========================================================
-
-if monitoring_rows:
-
-    monitoring_df = pd.DataFrame(
-        monitoring_rows
-    )
-
-
-    monitoring_df = (
-        monitoring_df
-        .sort_values(
-            by=[
-                "Date",
-                "Task"
-            ],
-            ascending=[
-                False,
-                True
-            ]
-        )
-    )
-
-
-    monitoring_df[
-        "Date"
-    ] = pd.to_datetime(
-        monitoring_df[
-            "Date"
-        ]
-    ).dt.strftime(
-        "%d-%m-%Y"
-    )
-
-
-    st.dataframe(
-        monitoring_df,
-        use_container_width=True,
-        hide_index=True
-    )
-
-else:
-
-    st.info(
-        "No active Daily tasks have expected "
-        "review dates in the selected period."
-    )
-
-
-st.divider()
-
-
-# ==========================================================
-# MY REVIEW HISTORY
-# ==========================================================
-
-st.subheader(
-    "📚 My Review History"
 )
 
 
-if my_reviews:
+# ============================================================
+# DATE-WISE BREAKDOWN
+# ============================================================
 
-    history_rows = []
+st.markdown("### 📆 Date-wise Review Breakdown")
 
 
-    for review in my_reviews:
+if monitoring_rows:
 
-        history_rows.append(
+    date_summary_rows = []
+
+    date_groups = {}
+
+    for row in monitoring_rows:
+
+        review_date = row["Date"]
+
+        if review_date not in date_groups:
+
+            date_groups[review_date] = {
+                "Expected": 0,
+                "Submitted": 0,
+                "Missing": 0,
+            }
+
+        date_groups[review_date]["Expected"] += 1
+
+        if row["Status"] == "Submitted":
+
+            date_groups[review_date]["Submitted"] += 1
+
+        else:
+
+            date_groups[review_date]["Missing"] += 1
+
+
+    for review_date in sorted(
+        date_groups.keys()
+    ):
+
+        values = date_groups[
+            review_date
+        ]
+
+        expected = values["Expected"]
+        submitted = values["Submitted"]
+        missing = values["Missing"]
+
+        if expected > 0:
+
+            completion = (
+                submitted / expected
+            ) * 100
+
+        else:
+
+            completion = 0
+
+        date_summary_rows.append(
             {
-
-                "Review ID":
-                    review.get(
-                        "Review_ID",
-                        ""
-                    ),
-
-                "Date":
-                    review.get(
-                        "Date",
-                        ""
-                    ),
-
-                "Task ID":
-                    review.get(
-                        "Task_ID",
-                        ""
-                    ),
-
-                "Assignment ID":
-                    review.get(
-                        "Assignment_ID",
-                        ""
-                    ),
-
-                "Status":
-                    review.get(
-                        "Status",
-                        ""
-                    ),
-
-                "Remarks":
-                    review.get(
-                        "Remarks",
-                        ""
-                    ),
-
-                "Submitted At":
-                    review.get(
-                        "Submitted_At",
-                        ""
-                    )
-
+                "Date": review_date.strftime(
+                    "%d-%m-%Y"
+                ),
+                "Expected": expected,
+                "Submitted": submitted,
+                "Missing": missing,
+                "Completion %": round(
+                    completion,
+                    1
+                ),
             }
         )
 
 
-    history_df = pd.DataFrame(
-        history_rows
+    date_summary_df = pd.DataFrame(
+        date_summary_rows
     )
 
-
-    if not history_df.empty:
-
-        history_df[
-            "_SortDate"
-        ] = history_df[
-            "Date"
-        ].apply(
-            parse_date
-        )
-
-
-        history_df = (
-            history_df
-            .sort_values(
-                by="_SortDate",
-                ascending=False
-            )
-            .drop(
-                columns=[
-                    "_SortDate"
-                ]
-            )
-        )
-
-
     st.dataframe(
-        history_df,
+        date_summary_df,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
     )
 
 else:
 
     st.info(
-        "No Daily Reviews submitted yet."
+        "No Daily Review monitoring data "
+        "is available for the selected date range."
+    )
+
+
+# ============================================================
+# TASK-WISE BREAKDOWN
+# ============================================================
+
+st.markdown("### 📋 Task-wise Review Breakdown")
+
+
+if monitoring_rows:
+
+    task_summary_rows = []
+
+    task_groups = {}
+
+    for row in monitoring_rows:
+
+        task_key = (
+            row["Task ID"],
+            row["Task Name"],
+        )
+
+        if task_key not in task_groups:
+
+            task_groups[task_key] = {
+                "Expected": 0,
+                "Submitted": 0,
+                "Missing": 0,
+            }
+
+        task_groups[task_key]["Expected"] += 1
+
+        if row["Status"] == "Submitted":
+
+            task_groups[task_key]["Submitted"] += 1
+
+        else:
+
+            task_groups[task_key]["Missing"] += 1
+
+
+    for (
+        task_id,
+        task_name,
+    ) in sorted(
+        task_groups.keys(),
+        key=lambda x: (
+            str(x[1]).lower(),
+            str(x[0]).lower(),
+        ),
+    ):
+
+        values = task_groups[
+            (
+                task_id,
+                task_name,
+            )
+        ]
+
+        expected = values["Expected"]
+        submitted = values["Submitted"]
+        missing = values["Missing"]
+
+        if expected > 0:
+
+            completion = (
+                submitted / expected
+            ) * 100
+
+        else:
+
+            completion = 0
+
+        task_summary_rows.append(
+            {
+                "Task ID": task_id,
+                "Task Name": task_name,
+                "Expected": expected,
+                "Submitted": submitted,
+                "Missing": missing,
+                "Completion %": round(
+                    completion,
+                    1
+                ),
+            }
+        )
+
+
+    task_summary_df = pd.DataFrame(
+        task_summary_rows
+    )
+
+    st.dataframe(
+        task_summary_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+else:
+
+    st.info(
+        "No task-wise monitoring data "
+        "is available."
+    )
+
+
+# ============================================================
+# DETAILED MONITORING
+# ============================================================
+
+st.markdown("### 🔎 Detailed Daily Review Status")
+
+
+if monitoring_rows:
+
+    detail_rows = []
+
+    for row in sorted(
+        monitoring_rows,
+        key=lambda x: (
+            x["Date"],
+            x["Task Name"],
+        ),
+        reverse=True,
+    ):
+
+        detail_rows.append(
+            {
+                "Date": row["Date"].strftime(
+                    "%d-%m-%Y"
+                ),
+                "Task ID": row["Task ID"],
+                "Task Name": row["Task Name"],
+                "Assignment ID": row["Assignment ID"],
+                "Status": row["Status"],
+            }
+        )
+
+
+    detail_df = pd.DataFrame(
+        detail_rows
+    )
+
+    st.dataframe(
+        detail_df,
+        use_container_width=True,
+        hide_index=True,
+    )
+
+else:
+
+    st.info(
+        "No detailed review records available."
     )
 
 
 st.divider()
 
 
-# ==========================================================
+# ============================================================
 # QUICK ACTIONS
-# ==========================================================
+# ============================================================
 
-st.subheader(
-    "⚡ Quick Actions"
-)
+st.subheader("⚡ Quick Actions")
 
+quick_col1, quick_col2 = st.columns(2)
 
-q1, q2 = st.columns(2)
-
-
-with q1:
+with quick_col1:
 
     if st.button(
         "📋 Task Management",
-        use_container_width=True
+        use_container_width=True,
     ):
 
         st.switch_page(
@@ -1230,11 +1151,11 @@ with q1:
         )
 
 
-with q2:
+with quick_col2:
 
     if st.button(
         "📝 Daily Review",
-        use_container_width=True
+        use_container_width=True,
     ):
 
         st.switch_page(
