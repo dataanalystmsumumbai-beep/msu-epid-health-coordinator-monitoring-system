@@ -596,53 +596,93 @@ else:
                     }
                 )
 
-                action_col1, action_col2 = st.columns([5, 1])
+                action_col1, action_col2 = st.columns(
+                    [5, 1]
+                )
 
                 with action_col1:
+
                     st.markdown(
                         f"**{task_id}** — "
                         f"{value(task, 'Task_Name', 'Task', 'Name')}"
                     )
 
                 with action_col2:
+
                     if task_status == "ACTIVE":
+
                         if st.button(
                             "🔴 Disable",
                             key=f"disable_task_{row_no}",
                             use_container_width=True
                         ):
+
                             try:
-                                success, message = TaskService.deactivate_task(
-                                    row_no
+
+                                success, message = (
+                                    TaskService
+                                    .deactivate_task(
+                                        row_no
+                                    )
                                 )
+
                                 if success:
-                                    st.success(message)
+
+                                    st.success(
+                                        message
+                                    )
+
                                     st.rerun()
+
                                 else:
-                                    st.error(message)
+
+                                    st.error(
+                                        message
+                                    )
+
                             except Exception as e:
+
                                 st.error(
                                     f"Unable to disable task: {e}"
                                 )
+
                     else:
+
                         if st.button(
                             "🟢 Enable",
                             key=f"enable_task_{row_no}",
                             use_container_width=True
                         ):
+
                             try:
-                                success, message = TaskService.activate_task(
-                                    row_no
+
+                                success, message = (
+                                    TaskService
+                                    .activate_task(
+                                        row_no
+                                    )
                                 )
+
                                 if success:
-                                    st.success(message)
+
+                                    st.success(
+                                        message
+                                    )
+
                                     st.rerun()
+
                                 else:
-                                    st.error(message)
+
+                                    st.error(
+                                        message
+                                    )
+
                             except Exception as e:
+
                                 st.error(
                                     f"Unable to enable task: {e}"
                                 )
+
 
             st.divider()
 
@@ -653,6 +693,7 @@ else:
                 use_container_width=True,
                 hide_index=True
             )
+
 
     # ======================================================
     # TAB 2 — CREATE NEW TASK
@@ -772,23 +813,12 @@ else:
 
                     success, message = (
                         TaskService.create_task(
-                            task_name=
-                                clean_task_name,
-
-                            category=
-                                category,
-
-                            frequency=
-                                frequency,
-
-                            priority=
-                                priority,
-
-                            task_link=
-                                task_link.strip(),
-
-                            remarks=
-                                remarks.strip()
+                            task_name=clean_task_name,
+                            category=category,
+                            frequency=frequency,
+                            priority=priority,
+                            task_link=task_link.strip(),
+                            remarks=remarks.strip()
                         )
                     )
 
@@ -1047,30 +1077,17 @@ else:
                             success, message = (
                                 TaskAssignmentService
                                 .assign_task(
-                                    coordinator_id=
-                                        selected_coordinator,
-
-                                    task_id=
-                                        selected_task,
-
-                                    assigned_by=
-                                        current_username,
-
-                                    assigned_date=
-                                        assigned_date.strftime(
-                                            "%d-%m-%Y"
-                                        ),
-
-                                    due_date=
-                                        due_date.strftime(
-                                            "%d-%m-%Y"
-                                        ),
-
-                                    priority=
-                                        priority,
-
-                                    remarks=
-                                        remarks.strip()
+                                    coordinator_id=selected_coordinator,
+                                    task_id=selected_task,
+                                    assigned_by=current_username,
+                                    assigned_date=assigned_date.strftime(
+                                        "%d-%m-%Y"
+                                    ),
+                                    due_date=due_date.strftime(
+                                        "%d-%m-%Y"
+                                    ),
+                                    priority=priority,
+                                    remarks=remarks.strip()
                                 )
                             )
 
