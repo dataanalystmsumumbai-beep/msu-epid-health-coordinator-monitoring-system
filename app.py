@@ -30,6 +30,16 @@ if st.session_state.get("logged_in", False):
 
 st.title("🏥 MSU/EPID Health Coordinator Monitoring System")
 
+st.markdown(
+    """
+    <div style="font-size: 13px; color: #666; margin-top: -10px; margin-bottom: 20px;">
+        <b>App Made By:</b> Data Analyst &nbsp; | &nbsp;
+        <b>Institution:</b> Metropolitan Surveillance Unit (MSU), Mumbai
+    </div>
+    """,
+    unsafe_allow_html=True
+)
+
 st.subheader("Login")
 
 with st.form("login_form", clear_on_submit=False):
