@@ -505,40 +505,14 @@ st.divider()
 # APPLICATION CREDIT
 # ==========================================================
 
+st.divider()
+
 st.markdown(
     """
-    <div style="
-        text-align: center;
-        padding: 18px;
-        margin-top: 10px;
-    ">
-        <div style="
-            font-size: 14px;
-            color: #666;
-        ">
-            App Made By
-        </div>
-
-        <div style="
-            font-size: 22px;
-            font-weight: 600;
-            margin-top: 4px;
-        ">
-            Data Analyst
-        </div>
-
-        <div style="
-            font-size: 15px;
-            color: #666;
-            margin-top: 2px;
-        ">
-            MSU, Mumbai
-        </div>
-    </div>
-    """,
-    unsafe_allow_html=True
+    **App Made By:** Data Analyst  
+    **Institution:** Metropolitan Surveillance Unit (MSU), Mumbai
+    """
 )
-
 
 # ==========================================================
 # FOOTER
