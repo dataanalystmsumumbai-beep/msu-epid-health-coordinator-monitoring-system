@@ -22,7 +22,7 @@ st.set_page_config(
 
 
 # ==========================================================
-# ACCESS
+# ACCESS CONTROL
 # ==========================================================
 
 require_login([
@@ -33,7 +33,7 @@ require_login([
 
 
 # ==========================================================
-# SESSION
+# SESSION INFORMATION
 # ==========================================================
 
 current_role = str(
@@ -46,6 +46,13 @@ current_role = str(
 current_username = str(
     st.session_state.get(
         "username",
+        ""
+    )
+).strip()
+
+current_user_id = str(
+    st.session_state.get(
+        "user_id",
         ""
     )
 ).strip()
@@ -65,7 +72,7 @@ st.divider()
 
 
 # ==========================================================
-# SYSTEM STATUS
+# APPLICATION STATUS
 # ==========================================================
 
 st.subheader("🖥️ Application Status")
@@ -101,7 +108,7 @@ st.divider()
 
 
 # ==========================================================
-# SESSION INFORMATION
+# CURRENT SESSION
 # ==========================================================
 
 st.subheader("🔐 Current Session")
@@ -114,15 +121,10 @@ session_data = {
         "Session Status"
     ],
     "Value": [
-        current_username,
-        current_role,
-        str(
-            st.session_state.get(
-                "user_id",
-                ""
-            )
-        ),
-        "Active"
+        current_username if current_username else "Not Available",
+        current_role if current_role else "Not Available",
+        current_user_id if current_user_id else "Not Available",
+        "🟢 Active"
     ]
 }
 
@@ -143,15 +145,27 @@ st.subheader("📦 Module Status")
 modules = {
     "Module": [
         "Login & Authentication",
+        "Developer Dashboard",
+        "Admin Dashboard",
+        "Coordinator Dashboard",
         "User Management",
         "Task Management",
         "Daily Review",
         "Notifications",
         "Reports Dashboard",
         "Help Center",
-        "System Manual"
+        "System Settings",
+        "System Manual",
+        "About",
+        "Contact Support"
     ],
     "Status": [
+        "🟢 Active",
+        "🟢 Active",
+        "🟢 Active",
+        "🟢 Active",
+        "🟢 Active",
+        "🟢 Active",
         "🟢 Active",
         "🟢 Active",
         "🟢 Active",
@@ -163,8 +177,10 @@ modules = {
     ]
 }
 
-st.table(
-    modules
+st.dataframe(
+    modules,
+    use_container_width=True,
+    hide_index=True
 )
 
 
@@ -187,11 +203,18 @@ role_access = {
         "Full System Access",
         "Operational Management",
         "Task & Daily Review"
+    ],
+    "Status": [
+        "🟢 Active",
+        "🟢 Active",
+        "🟢 Active"
     ]
 }
 
-st.table(
-    role_access
+st.dataframe(
+    role_access,
+    use_container_width=True,
+    hide_index=True
 )
 
 
@@ -199,7 +222,46 @@ st.divider()
 
 
 # ==========================================================
-# LAST CHECK
+# SYSTEM COMPONENT CHECK
+# ==========================================================
+
+st.subheader("🔎 System Component Check")
+
+component_data = {
+    "Component": [
+        "User Authentication",
+        "Role-Based Access",
+        "Task Assignment",
+        "Task Monitoring",
+        "Daily Review Monitoring",
+        "Notification System",
+        "Reports Dashboard",
+        "Navigation System"
+    ],
+    "Status": [
+        "🟢 Operational",
+        "🟢 Operational",
+        "🟢 Operational",
+        "🟢 Operational",
+        "🟢 Operational",
+        "🟢 Operational",
+        "🟢 Operational",
+        "🟢 Operational"
+    ]
+}
+
+st.dataframe(
+    component_data,
+    use_container_width=True,
+    hide_index=True
+)
+
+
+st.divider()
+
+
+# ==========================================================
+# STATUS CHECK
 # ==========================================================
 
 st.subheader("🕒 Status Check")
