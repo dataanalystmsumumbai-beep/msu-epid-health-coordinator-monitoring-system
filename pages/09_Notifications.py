@@ -1,853 +1,873 @@
 import streamlit as st
-import pandas as pd
-
-from datetime import datetime
+from datetime import datetime, date
 from zoneinfo import ZoneInfo
-
-from core.navigation import require_login
 
 from config.config import (
     ROLE_DEVELOPER,
     ROLE_ADMIN,
     ROLE_COORDINATOR,
     NOTIFICATIONS,
+    DAILY_REVIEW,
 )
 
-from services.task_assignment_service import (
-    TaskAssignmentService
-)
-
-from utils.google_sheet import (
-    read_all,
-    update_value,
-)
+from services.notification_service import NotificationService
+from services.task_assignment_service import TaskAssignmentService
+from utils.google_sheet import read_all, update_value
 
 
-# ==========================================================
+# ============================================================
 # PAGE CONFIG
-# ==========================================================
+# ============================================================
 
 st.set_page_config(
     page_title="Notifications",
     page_icon="🔔",
-    layout="wide"
+    layout="wide",
 )
 
 
-# ==========================================================
-# ACCESS
-# ==========================================================
+# ============================================================
+# TIMEZONE
+# ============================================================
 
-require_login([
-    ROLE_DEVELOPER,
-    ROLE_ADMIN,
-    ROLE_COORDINATOR
-])
+IST = ZoneInfo("Asia/Kolkata")
 
 
-# ==========================================================
-# INDIA TIMEZONE
-# ==========================================================
+# ============================================================
+# SESSION / LOGIN HELPERS
+# ============================================================
 
-INDIA_TZ = ZoneInfo(
-    "Asia/Kolkata"
-)
+def get_current_user():
+    """
+    Supports both session formats used in the project.
+    """
 
+    user = st.session_state.get("user")
 
-# ==========================================================
-# SESSION
-# ==========================================================
+    if isinstance(user, dict):
+        return user
 
-current_user = st.session_state.get(
-    "user",
-    {}
-)
+    role = st.session_state.get("role")
+    user_id = st.session_state.get("user_id")
+    username = st.session_state.get("username")
 
-current_user_id = str(
-    st.session_state.get(
-        "user_id",
-        current_user.get(
-            "User_ID",
-            ""
-        )
-    )
-).strip()
+    if role or user_id or username:
+        return {
+            "Role": role,
+            "User_ID": user_id,
+            "Username": username,
+        }
 
-current_username = str(
-    st.session_state.get(
-        "username",
-        current_user.get(
-            "Username",
-            ""
-        )
-    )
-).strip()
-
-current_role = str(
-    st.session_state.get(
-        "role",
-        current_user.get(
-            "Role",
-            ""
-        )
-    )
-).strip()
+    return None
 
 
-# ==========================================================
-# HELPERS
-# ==========================================================
+def get_user_value(user, *keys):
+    """
+    Safely get a value from the current user dictionary.
+    """
 
-def clean(value):
-
-    if value is None:
-        return ""
-
-    return str(
-        value
-    ).strip()
-
-
-def get_value(
-    row,
-    *keys
-):
-
-    if not row:
+    if not isinstance(user, dict):
         return ""
 
     for key in keys:
+        if key in user:
+            value = user.get(key)
 
-        value = row.get(
-            key,
-            ""
-        )
-
-        if (
-            value is not None
-            and clean(value) != ""
-        ):
-
-            return clean(value)
+            if value is not None and str(value).strip():
+                return str(value).strip()
 
     return ""
 
 
-def normalize_status(
-    status
-):
+current_user = get_current_user()
 
-    status = clean(
-        status
-    ).lower()
-
-    if status in [
-        "completed",
-        "complete",
-        "done"
-    ]:
-
-        return "Completed"
-
-    if status in [
-        "in progress",
-        "in-progress",
-        "ongoing",
-        "working"
-    ]:
-
-        return "In Progress"
-
-    if status in [
-        "pending",
-        "not started",
-        "not_started"
-    ]:
-
-        return "Pending"
-
-    return clean(
-        status
-    ).title()
+if not current_user:
+    st.error("🔒 Please login to access Notifications.")
+    st.stop()
 
 
-def safe_read(
-    sheet_name
-):
+current_role = get_user_value(
+    current_user,
+    "Role",
+    "role",
+)
+
+current_user_id = get_user_value(
+    current_user,
+    "User_ID",
+    "user_id",
+    "UserID",
+)
+
+current_username = get_user_value(
+    current_user,
+    "Username",
+    "username",
+    "Name",
+)
+
+
+if current_role not in [
+    ROLE_DEVELOPER,
+    ROLE_ADMIN,
+    ROLE_COORDINATOR,
+]:
+    st.error("🚫 You are not authorized to access Notifications.")
+    st.stop()
+
+
+# ============================================================
+# GENERAL HELPERS
+# ============================================================
+
+def clean(value):
+    if value is None:
+        return ""
 
     try:
-
-        data = read_all(
-            sheet_name
-        )
-
-        return (
-            data
-            if data
-            else []
-        )
-
+        if value != value:
+            return ""
     except Exception:
+        pass
+
+    return str(value).strip()
+
+
+def get_value(row, *keys):
+    if not isinstance(row, dict):
+        return ""
+
+    for key in keys:
+        if key in row:
+            value = clean(row.get(key))
+
+            if value:
+                return value
+
+    return ""
+
+
+def normalize_status(value):
+    return clean(value).upper().replace("-", "_").replace(" ", "_")
+
+
+def safe_read(sheet_name):
+    """
+    Safely read a Google Sheet.
+    """
+
+    try:
+        data = read_all(sheet_name)
+
+        if data is None:
+            return []
+
+        if isinstance(data, list):
+            return data
 
         return []
 
+    except Exception:
+        return []
 
-# ==========================================================
-# LOAD CURRENT DATA
-# ==========================================================
 
-assignments = []
+def parse_datetime(value):
+    """
+    Convert common date/datetime formats to datetime.
+    """
 
-try:
+    if isinstance(value, datetime):
+        return value
 
-    assignments = (
-        TaskAssignmentService
-        .get_all_assignments()
-        or []
+    if isinstance(value, date):
+        return datetime.combine(value, datetime.min.time())
+
+    text = clean(value)
+
+    if not text:
+        return None
+
+    formats = [
+        "%d-%m-%Y %H:%M",
+        "%d-%m-%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M",
+        "%d/%m/%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%Y-%m-%d %H:%M:%S",
+        "%Y/%m/%d %H:%M",
+        "%Y/%m/%d %H:%M:%S",
+    ]
+
+    for fmt in formats:
+        try:
+            return datetime.strptime(text, fmt)
+        except Exception:
+            continue
+
+    return None
+
+
+def format_datetime(value):
+    dt = parse_datetime(value)
+
+    if dt is None:
+        return clean(value) or "Not Mentioned"
+
+    return dt.strftime("%d-%m-%Y %H:%M")
+
+
+def get_priority_value(row):
+    return get_value(
+        row,
+        "Priority",
+        "priority",
+        "Task_Priority",
+        "Task Priority",
     )
 
-except Exception:
 
+def get_task_name(row):
+    return get_value(
+        row,
+        "Task_Name",
+        "Task Name",
+        "Task",
+        "Title",
+        "task_name",
+    )
+
+
+def get_task_id(row):
+    return get_value(
+        row,
+        "Task_ID",
+        "Task ID",
+        "task_id",
+    )
+
+
+def get_coordinator_id(row):
+    return get_value(
+        row,
+        "Coordinator_ID",
+        "Coordinator ID",
+        "coordinator_id",
+    )
+
+
+def get_assignment_id(row):
+    return get_value(
+        row,
+        "Assignment_ID",
+        "Assignment ID",
+        "assignment_id",
+    )
+
+
+# ============================================================
+# LOAD DATA
+# ============================================================
+
+assignment_service = TaskAssignmentService()
+
+try:
+    assignments = assignment_service.get_all_assignments()
+except Exception:
+    assignments = []
+
+if not isinstance(assignments, list):
     assignments = []
 
 
-# ==========================================================
-# LOAD DAILY REVIEWS
-# ==========================================================
+# ------------------------------------------------------------
+# IMPORTANT:
+# Correct Daily Review sheet is 05_Daily_Review.
+# Do NOT use 06_Daily_Review because 06 is Login History.
+# ------------------------------------------------------------
 
-reviews = safe_read(
-    "06_Daily_Review"
-)
+reviews = safe_read(DAILY_REVIEW)
 
-# Fallback for projects where the configured
-# Daily Review constant is different.
-
+# Fallback using the exact project sheet name.
 if not reviews:
-
-    try:
-
-        from config.config import DAILY_REVIEW
-
-        reviews = safe_read(
-            DAILY_REVIEW
-        )
-
-    except Exception:
-
-        reviews = []
+    reviews = safe_read("05_Daily_Review")
 
 
-# ==========================================================
-# LOAD PERSISTENT NOTIFICATIONS
-# ==========================================================
+# Persistent notifications
+persistent_notifications = safe_read(NOTIFICATIONS)
 
-persistent_notifications = safe_read(
-    NOTIFICATIONS
+
+# ============================================================
+# PAGE HEADER
+# ============================================================
+
+st.title("🔔 Notifications")
+
+st.caption(
+    "View system notifications, task alerts, deadlines and Daily Review updates."
 )
 
-
-# ==========================================================
-# ROLE FILTER FOR DYNAMIC ALERTS
-# ==========================================================
-
-dynamic_assignments = list(
-    assignments
-)
-
-dynamic_reviews = list(
-    reviews
-)
+st.divider()
 
 
-if current_role.lower() == "coordinator":
+# ============================================================
+# USER INFORMATION
+# ============================================================
 
-    dynamic_assignments = [
+user_col1, user_col2, user_col3 = st.columns(3)
 
-        assignment
+with user_col1:
+    st.metric(
+        "Current User",
+        current_username or "Not Mentioned",
+    )
 
-        for assignment in dynamic_assignments
+with user_col2:
+    st.metric(
+        "Role",
+        current_role or "Not Mentioned",
+    )
 
-        if get_value(
-            assignment,
-            "Coordinator_ID",
-            "Coordinator_Id"
-        )
-        == current_user_id
-
-    ]
-
-
-    dynamic_reviews = [
-
-        review
-
-        for review in dynamic_reviews
-
-        if get_value(
-            review,
-            "Coordinator_ID",
-            "Coordinator_Id"
-        )
-        == current_user_id
-
-    ]
+with user_col3:
+    st.metric(
+        "User ID",
+        current_user_id or "Not Mentioned",
+    )
 
 
-# ==========================================================
-# BUILD DYNAMIC NOTIFICATIONS
-# ==========================================================
+# ============================================================
+# BUILD LIVE SYSTEM ALERTS
+# ============================================================
 
-dynamic_notifications = []
+live_alerts = []
 
 
-# ==========================================================
-# TASK NOTIFICATIONS
-# ==========================================================
+def add_live_alert(
+    alert_type,
+    title,
+    message,
+    priority="Normal",
+    created_at=None,
+    task_id="",
+    task_name="",
+    coordinator_id="",
+):
+    live_alerts.append(
+        {
+            "Alert_Type": alert_type,
+            "Title": title,
+            "Message": message,
+            "Priority": priority or "Normal",
+            "Created_At": created_at or datetime.now(IST),
+            "Task_ID": task_id,
+            "Task_Name": task_name,
+            "Coordinator_ID": coordinator_id,
+        }
+    )
 
-for assignment in dynamic_assignments:
+
+# ============================================================
+# TASK ALERTS
+# ============================================================
+
+for assignment in assignments:
+
+    assignment_coordinator = get_coordinator_id(assignment)
+
+    # Coordinator should only see own task alerts.
+    if current_role == ROLE_COORDINATOR:
+        if (
+            assignment_coordinator
+            and current_user_id
+            and assignment_coordinator != current_user_id
+        ):
+            continue
+
+    task_id = get_task_id(assignment)
+    task_name = get_task_name(assignment)
 
     status = normalize_status(
         get_value(
             assignment,
-            "Status"
+            "Status",
+            "Task_Status",
+            "Assignment_Status",
         )
     )
 
-    task_id = get_value(
-        assignment,
-        "Task_ID",
-        "Task_Id"
-    )
+    priority = get_priority_value(assignment)
 
-    assignment_id = get_value(
+    assignment_date = get_value(
         assignment,
-        "Assignment_ID",
-        "Assignment_Id"
+        "Assignment_Date",
+        "Assigned_Date",
+        "Start_Date",
+        "Date",
     )
 
     due_date = get_value(
         assignment,
         "Due_Date",
-        "Due Date"
+        "Deadline",
+        "Due Date",
     )
 
-    assigned_date = get_value(
-        assignment,
-        "Assigned_Date",
-        "Assigned Date"
-    )
+    # --------------------------------------------------------
+    # Pending Task
+    # --------------------------------------------------------
 
-    priority = get_value(
-        assignment,
-        "Priority"
-    )
-
-
-    if status == "Pending":
-
-        dynamic_notifications.append(
-            {
-                "type": "task",
-                "icon": "⏳",
-                "title": "Pending Task",
-                "message":
-                    f"Task {task_id or assignment_id} "
-                    f"is currently pending.",
-                "priority":
-                    priority or "Medium",
-                "date":
-                    assigned_date,
-                "sort": 1
-            }
-        )
-
-
-    elif status == "In Progress":
-
-        dynamic_notifications.append(
-            {
-                "type": "task",
-                "icon": "🔄",
-                "title": "Task In Progress",
-                "message":
-                    f"Task {task_id or assignment_id} "
-                    f"is currently in progress.",
-                "priority":
-                    priority or "Medium",
-                "date":
-                    assigned_date,
-                "sort": 2
-            }
-        )
-
-
-    if due_date:
-
-        dynamic_notifications.append(
-            {
-                "type": "deadline",
-                "icon": "📅",
-                "title": "Task Due Date",
-                "message":
-                    f"Task {task_id or assignment_id} "
-                    f"has due date {due_date}.",
-                "priority":
-                    priority or "Medium",
-                "date":
-                    due_date,
-                "sort": 3
-            }
-        )
-
-
-    if priority.lower() in [
-        "high",
-        "critical",
-        "urgent"
+    if status in [
+        "PENDING",
+        "ASSIGNED",
+        "NOT_STARTED",
     ]:
-
-        dynamic_notifications.append(
-            {
-                "type": "priority",
-                "icon": "🚨",
-                "title": "High Priority Task",
-                "message":
-                    f"Task {task_id or assignment_id} "
-                    f"has {priority} priority.",
-                "priority":
-                    priority,
-                "date":
-                    assigned_date,
-                "sort": 0
-            }
+        add_live_alert(
+            alert_type="Task",
+            title="📋 Pending Task",
+            message=(
+                f"{task_name or task_id or 'Assigned task'} "
+                f"is pending."
+            ),
+            priority=priority or "Normal",
+            created_at=assignment_date,
+            task_id=task_id,
+            task_name=task_name,
+            coordinator_id=assignment_coordinator,
         )
 
+    # --------------------------------------------------------
+    # In Progress Task
+    # --------------------------------------------------------
 
-# ==========================================================
-# REVIEW NOTIFICATIONS
-# ==========================================================
+    if status in [
+        "IN_PROGRESS",
+        "INPROGRESS",
+        "STARTED",
+    ]:
+        add_live_alert(
+            alert_type="Task",
+            title="🔄 Task In Progress",
+            message=(
+                f"{task_name or task_id or 'Assigned task'} "
+                f"is currently in progress."
+            ),
+            priority=priority or "Normal",
+            created_at=assignment_date,
+            task_id=task_id,
+            task_name=task_name,
+            coordinator_id=assignment_coordinator,
+        )
 
-for review in dynamic_reviews:
+    # --------------------------------------------------------
+    # High Priority
+    # --------------------------------------------------------
+
+    if normalize_status(priority) in [
+        "HIGH",
+        "CRITICAL",
+        "URGENT",
+    ]:
+        add_live_alert(
+            alert_type="Priority",
+            title="🚨 High Priority Task",
+            message=(
+                f"{task_name or task_id or 'Task'} "
+                f"has {priority} priority."
+            ),
+            priority=priority,
+            created_at=assignment_date,
+            task_id=task_id,
+            task_name=task_name,
+            coordinator_id=assignment_coordinator,
+        )
+
+    # --------------------------------------------------------
+    # Due Date Alert
+    # --------------------------------------------------------
+
+    due_dt = parse_datetime(due_date)
+
+    if due_dt is not None:
+
+        now_ist = datetime.now(IST)
+
+        if due_dt.tzinfo is None:
+            due_dt = due_dt.replace(tzinfo=IST)
+
+        remaining_seconds = (
+            due_dt - now_ist
+        ).total_seconds()
+
+        # Due within 24 hours
+        if 0 <= remaining_seconds <= 86400:
+
+            add_live_alert(
+                alert_type="Deadline",
+                title="⏰ Task Due Soon",
+                message=(
+                    f"{task_name or task_id or 'Task'} "
+                    f"is due on {due_dt.strftime('%d-%m-%Y %H:%M')}."
+                ),
+                priority="Urgent",
+                created_at=due_dt,
+                task_id=task_id,
+                task_name=task_name,
+                coordinator_id=assignment_coordinator,
+            )
+
+        # Already overdue
+        elif remaining_seconds < 0 and status not in [
+            "COMPLETED",
+            "CLOSED",
+            "DONE",
+        ]:
+
+            add_live_alert(
+                alert_type="Deadline",
+                title="🔴 Overdue Task",
+                message=(
+                    f"{task_name or task_id or 'Task'} "
+                    f"was due on {due_dt.strftime('%d-%m-%Y %H:%M')}."
+                ),
+                priority="Critical",
+                created_at=due_dt,
+                task_id=task_id,
+                task_name=task_name,
+                coordinator_id=assignment_coordinator,
+            )
+
+
+# ============================================================
+# DAILY REVIEW ALERTS
+# ============================================================
+
+for review in reviews:
+
+    review_coordinator = get_value(
+        review,
+        "Coordinator_ID",
+        "Coordinator ID",
+        "coordinator_id",
+    )
+
+    if current_role == ROLE_COORDINATOR:
+
+        if (
+            review_coordinator
+            and current_user_id
+            and review_coordinator != current_user_id
+        ):
+            continue
 
     review_status = normalize_status(
         get_value(
             review,
             "Status",
-            "Review_Status"
+            "Review_Status",
+            "Review Status",
         )
     )
 
-    task_id = get_value(
+    review_task_id = get_task_id(review)
+
+    review_task_name = get_value(
         review,
-        "Task_ID",
-        "Task_Id"
+        "Task_Name",
+        "Task Name",
+        "Task",
     )
 
     review_date = get_value(
         review,
+        "Date",
         "Review_Date",
         "Review Date",
-        "Date"
     )
 
+    if review_status == "COMPLETED":
 
-    if review_status == "Completed":
+        add_live_alert(
+            alert_type="Review",
+            title="✅ Daily Review Completed",
+            message=(
+                f"Daily Review completed for "
+                f"{review_task_name or review_task_id or 'task'}."
+            ),
+            priority="Normal",
+            created_at=review_date,
+            task_id=review_task_id,
+            task_name=review_task_name,
+            coordinator_id=review_coordinator,
+        )
 
-        dynamic_notifications.append(
-            {
-                "type": "review",
-                "icon": "✅",
-                "title": "Daily Review Completed",
-                "message":
-                    f"Daily Review submitted for "
-                    f"Task {task_id}.",
-                "priority": "Normal",
-                "date":
-                    review_date,
-                "sort": 1
-            }
+    elif review_status in [
+        "IN_PROGRESS",
+        "INPROGRESS",
+    ]:
+
+        add_live_alert(
+            alert_type="Review",
+            title="🔄 Daily Review In Progress",
+            message=(
+                f"Daily Review is in progress for "
+                f"{review_task_name or review_task_id or 'task'}."
+            ),
+            priority="Medium",
+            created_at=review_date,
+            task_id=review_task_id,
+            task_name=review_task_name,
+            coordinator_id=review_coordinator,
+        )
+
+    elif review_status in [
+        "PENDING",
+        "NOT_STARTED",
+        "MISSING",
+        "NOT_REPORTING",
+    ]:
+
+        add_live_alert(
+            alert_type="Review",
+            title="⚠️ Pending Daily Review",
+            message=(
+                f"Daily Review is pending for "
+                f"{review_task_name or review_task_id or 'task'}."
+            ),
+            priority="High",
+            created_at=review_date,
+            task_id=review_task_id,
+            task_name=review_task_name,
+            coordinator_id=review_coordinator,
         )
 
 
-    elif review_status == "In Progress":
+# ============================================================
+# PERSISTENT NOTIFICATIONS FILTER
+# ============================================================
 
-        dynamic_notifications.append(
-            {
-                "type": "review",
-                "icon": "🔄",
-                "title": "Daily Review In Progress",
-                "message":
-                    f"Daily Review for Task {task_id} "
-                    f"is marked In Progress.",
-                "priority": "Normal",
-                "date":
-                    review_date,
-                "sort": 2
-            }
-        )
+visible_notifications = []
 
-
-    elif review_status == "Pending":
-
-        dynamic_notifications.append(
-            {
-                "type": "review",
-                "icon": "⚠️",
-                "title": "Pending Daily Review",
-                "message":
-                    f"Daily Review for Task {task_id} "
-                    f"is still pending.",
-                "priority": "High",
-                "date":
-                    review_date,
-                "sort": 0
-            }
-        )
-
-
-# ==========================================================
-# PERSISTENT USER NOTIFICATIONS
-# ==========================================================
-
-user_notifications = []
-
-
-for index, notification in enumerate(
-    persistent_notifications
+for row_index, notification in enumerate(
+    persistent_notifications,
+    start=2,
 ):
 
     recipient_id = get_value(
         notification,
         "Recipient_ID",
-        "Recipient_Id"
+        "Recipient ID",
+        "recipient_id",
     )
 
-    if current_role.lower() in [
-        "admin",
-        "developer"
+    if current_role in [
+        ROLE_DEVELOPER,
+        ROLE_ADMIN,
     ]:
-
         visible = True
 
     else:
-
         visible = (
-            recipient_id
-            == current_user_id
+            recipient_id == current_user_id
+            or recipient_id == current_username
         )
 
-
     if not visible:
-
         continue
 
+    item = dict(notification)
 
-    user_notifications.append(
-        {
-            "sheet_row": index + 2,
-            "notification": notification
-        }
-    )
+    # Preserve actual Google Sheet row number.
+    item["_sheet_row"] = row_index
 
-
-# ==========================================================
-# HEADER
-# ==========================================================
-
-st.title(
-    "🔔 Notifications"
-)
-
-st.caption(
-    f"User: {current_username} | "
-    f"Role: {current_role}"
-)
-
-st.divider()
+    visible_notifications.append(item)
 
 
-# ==========================================================
-# PERSISTENT NOTIFICATION SUMMARY
-# ==========================================================
+# ============================================================
+# NOTIFICATION COUNTS
+# ============================================================
 
-persistent_total = len(
-    user_notifications
-)
-
-persistent_unread = sum(
-    1
-    for item in user_notifications
-
-    if get_value(
-        item["notification"],
-        "Status"
-    ).upper()
-    == "UNREAD"
-)
-
-persistent_read = (
-    persistent_total
-    - persistent_unread
-)
+unread_notifications = [
+    item
+    for item in visible_notifications
+    if normalize_status(
+        get_value(
+            item,
+            "Status",
+            "Notification_Status",
+        )
+    ) == "UNREAD"
+]
 
 
-# ==========================================================
-# DYNAMIC SUMMARY
-# ==========================================================
-
-dynamic_total = len(
-    dynamic_notifications
-)
-
-high_priority = sum(
-    1
-    for notification
-    in dynamic_notifications
-
-    if notification.get(
-        "priority",
-        ""
-    ).lower()
-    in [
-        "high",
-        "critical",
-        "urgent"
-    ]
-)
+unread_count = len(unread_notifications)
 
 
-# ==========================================================
-# METRICS
-# ==========================================================
+metric1, metric2, metric3 = st.columns(3)
 
-c1, c2, c3, c4 = st.columns(4)
-
-
-with c1:
-
+with metric1:
     st.metric(
         "🔔 Notifications",
-        persistent_total
+        len(visible_notifications),
     )
 
-
-with c2:
-
+with metric2:
     st.metric(
-        "🟠 Unread",
-        persistent_unread
+        "📩 Unread",
+        unread_count,
     )
 
-
-with c3:
-
+with metric3:
     st.metric(
-        "📢 Live Alerts",
-        dynamic_total
-    )
-
-
-with c4:
-
-    st.metric(
-        "🚨 High Priority",
-        high_priority
+        "⚡ Live Alerts",
+        len(live_alerts),
     )
 
 
 st.divider()
 
 
-# ==========================================================
+# ============================================================
 # MARK ALL AS READ
-# ==========================================================
+# ============================================================
 
-if persistent_unread > 0:
+if unread_notifications:
 
     if st.button(
-        "✓ Mark All Notifications as Read",
+        "✅ Mark All Notifications as Read",
         use_container_width=True,
-        key="mark_all_notifications_read"
     ):
 
         updated = 0
 
-        for item in user_notifications:
+        for notification in unread_notifications:
 
-            notification = item[
-                "notification"
-            ]
+            sheet_row = notification.get("_sheet_row")
 
-            row_number = item[
-                "sheet_row"
-            ]
-
-            status = get_value(
-                notification,
-                "Status"
-            ).upper()
-
-            if status != "UNREAD":
-
+            if not sheet_row:
                 continue
 
             try:
-
                 update_value(
                     NOTIFICATIONS,
-                    row_number,
+                    sheet_row,
                     6,
-                    "READ"
+                    "READ",
                 )
 
                 updated += 1
 
             except Exception:
-
-                pass
-
+                continue
 
         st.success(
-            f"{updated} notification(s) "
-            "marked as read."
+            f"✅ {updated} notification(s) marked as read."
         )
 
         st.rerun()
 
+else:
 
-# ==========================================================
+    st.info("📭 No unread notifications.")
+
+
+# ============================================================
 # PERSISTENT NOTIFICATIONS
-# ==========================================================
+# ============================================================
 
-st.subheader(
-    "📬 My Notifications"
-)
+st.subheader("📩 Persistent Notifications")
 
-
-if not user_notifications:
+if not visible_notifications:
 
     st.info(
-        "No persistent notifications found."
+        "No persistent notifications are available for the current user."
     )
 
 else:
 
-    for item in reversed(
-        user_notifications
-    ):
-
-        notification = item[
-            "notification"
-        ]
-
-        row_number = item[
-            "sheet_row"
-        ]
-
-        notification_id = get_value(
-            notification,
-            "Notification_ID",
-            "Notification_Id"
-        )
+    for notification in reversed(visible_notifications):
 
         title = get_value(
             notification,
-            "Title"
+            "Title",
         )
 
         message = get_value(
             notification,
-            "Message"
+            "Message",
         )
 
         notification_type = get_value(
             notification,
-            "Type"
+            "Type",
+            "Notification_Type",
         )
 
-        status = get_value(
-            notification,
-            "Status"
-        ).upper()
+        status = normalize_status(
+            get_value(
+                notification,
+                "Status",
+            )
+        )
 
         created_at = get_value(
             notification,
             "Created_At",
-            "Created At"
+            "Created At",
+            "Date",
         )
 
+        sheet_row = notification.get("_sheet_row")
 
-        is_unread = (
-            status == "UNREAD"
-        )
+        if status == "UNREAD":
 
-
-        if is_unread:
-
-            icon = "🟠"
+            status_text = "🔵 UNREAD"
 
         else:
 
-            icon = "🟢"
+            status_text = "⚪ READ"
 
+        with st.container(border=True):
 
-        with st.container(
-            border=True
-        ):
-
-            left, right = st.columns(
-                [7, 1]
+            col1, col2 = st.columns(
+                [5, 1]
             )
 
-
-            with left:
+            with col1:
 
                 st.markdown(
-                    f"### {icon} {title or 'Notification'}"
+                    f"### {title or 'Notification'}"
                 )
 
-                if message:
+                st.write(
+                    message or "No message available."
+                )
 
-                    st.write(
-                        message
-                    )
-
-                meta = []
+                info_parts = []
 
                 if notification_type:
-
-                    meta.append(
-                        f"Type: {notification_type}"
+                    info_parts.append(
+                        f"**Type:** {notification_type}"
                     )
 
                 if created_at:
-
-                    meta.append(
-                        f"Created: {created_at}"
+                    info_parts.append(
+                        f"**Created:** {format_datetime(created_at)}"
                     )
 
-                if meta:
+                info_parts.append(
+                    f"**Status:** {status_text}"
+                )
 
-                    st.caption(
-                        " | ".join(meta)
-                    )
+                st.caption(
+                    " | ".join(info_parts)
+                )
 
+            with col2:
 
-            with right:
-
-                if is_unread:
-
-                    st.caption(
-                        "UNREAD"
-                    )
+                if status == "UNREAD":
 
                     if st.button(
                         "✓ Read",
-                        key=(
-                            f"read_notification_"
-                            f"{row_number}_"
-                            f"{notification_id}"
-                        ),
+                        key=f"read_notification_{sheet_row}",
                         use_container_width=True,
                     ):
 
@@ -855,9 +875,9 @@ else:
 
                             update_value(
                                 NOTIFICATIONS,
-                                row_number,
+                                sheet_row,
                                 6,
-                                "READ"
+                                "READ",
                             )
 
                             st.success(
@@ -866,253 +886,255 @@ else:
 
                             st.rerun()
 
-                        except Exception as e:
+                        except Exception as exc:
 
                             st.error(
-                                f"Unable to update: {e}"
+                                f"Unable to update notification: {exc}"
                             )
 
-                else:
 
-                    st.caption(
-                        "READ"
-                    )
-
+# ============================================================
+# LIVE SYSTEM ALERTS
+# ============================================================
 
 st.divider()
 
+st.subheader("⚡ Live System Alerts")
 
-# ==========================================================
-# LIVE SYSTEM ALERTS
-# ==========================================================
-
-st.subheader(
-    "📢 Live System Alerts"
-)
-
-st.caption(
-    "These alerts are generated from current "
-    "task assignments and Daily Review records."
-)
-
-
-# ==========================================================
-# FILTERS
-# ==========================================================
-
-filter_col1, filter_col2 = st.columns(
-    2
-)
-
-
-with filter_col1:
-
-    notification_filter = st.selectbox(
-        "Notification Type",
-        [
-            "All",
-            "Task",
-            "Deadline",
-            "Priority",
-            "Review"
-        ],
-        key="live_notification_type_filter"
-    )
-
-
-with filter_col2:
-
-    priority_filter = st.selectbox(
-        "Priority",
-        [
-            "All",
-            "High",
-            "Critical",
-            "Urgent",
-            "Medium",
-            "Normal",
-            "Low"
-        ],
-        key="live_notification_priority_filter"
-    )
-
-
-# ==========================================================
-# APPLY FILTERS
-# ==========================================================
-
-filtered_dynamic = []
-
-
-for notification
-in dynamic_notifications:
-
-    ntype = notification.get(
-        "type",
-        ""
-    )
-
-    priority = notification.get(
-        "priority",
-        ""
-    )
-
-
-    if notification_filter != "All":
-
-        allowed_types = {
-
-            "Task": [
-                "task"
-            ],
-
-            "Deadline": [
-                "deadline"
-            ],
-
-            "Priority": [
-                "priority"
-            ],
-
-            "Review": [
-                "review"
-            ]
-
-        }
-
-        if ntype not in allowed_types.get(
-            notification_filter,
-            []
-        ):
-
-            continue
-
-
-    if priority_filter != "All":
-
-        if (
-            priority.lower()
-            !=
-            priority_filter.lower()
-        ):
-
-            continue
-
-
-    filtered_dynamic.append(
-        notification
-    )
-
-
-# ==========================================================
-# SORT
-# ==========================================================
-
-filtered_dynamic.sort(
-    key=lambda x: (
-        x.get(
-            "sort",
-            99
-        ),
-        x.get(
-            "date",
-            ""
-        )
-    )
-)
-
-
-# ==========================================================
-# DISPLAY LIVE ALERTS
-# ==========================================================
-
-if not filtered_dynamic:
+if not live_alerts:
 
     st.success(
-        "🎉 No live alerts available."
+        "🎉 No active task or Daily Review alerts."
     )
 
 else:
 
-    for notification
-    in filtered_dynamic:
+    # --------------------------------------------------------
+    # FILTERS
+    # --------------------------------------------------------
 
-        icon = notification.get(
-            "icon",
-            "🔔"
+    filter_col1, filter_col2 = st.columns(2)
+
+    with filter_col1:
+
+        alert_type_filter = st.selectbox(
+            "Notification Type",
+            [
+                "All",
+                "Task",
+                "Deadline",
+                "Priority",
+                "Review",
+            ],
+            key="notification_type_filter",
         )
 
-        title = notification.get(
-            "title",
-            "Notification"
-        )
+    with filter_col2:
 
-        message = notification.get(
-            "message",
-            ""
-        )
-
-        priority = notification.get(
-            "priority",
-            "Normal"
-        )
-
-        alert_date = notification.get(
-            "date",
-            ""
+        priority_filter = st.selectbox(
+            "Priority",
+            [
+                "All",
+                "Critical",
+                "Urgent",
+                "High",
+                "Medium",
+                "Normal",
+                "Low",
+            ],
+            key="notification_priority_filter",
         )
 
 
-        with st.container(
-            border=True
+    filtered_alerts = []
+
+    for alert in live_alerts:
+
+        if (
+            alert_type_filter != "All"
+            and alert.get("Alert_Type")
+            != alert_type_filter
         ):
+            continue
 
-            st.markdown(
-                f"### {icon} {title}"
+        if priority_filter != "All":
+
+            if normalize_status(
+                alert.get("Priority")
+            ) != normalize_status(
+                priority_filter
+            ):
+                continue
+
+        filtered_alerts.append(alert)
+
+
+    # --------------------------------------------------------
+    # SORT
+    # --------------------------------------------------------
+
+    def alert_sort_key(alert):
+
+        dt = parse_datetime(
+            alert.get("Created_At")
+        )
+
+        if dt is None:
+            return datetime.min.replace(
+                tzinfo=IST
             )
 
-            st.write(
-                message
+        if dt.tzinfo is None:
+            dt = dt.replace(
+                tzinfo=IST
             )
 
-            meta = (
-                f"**Priority:** {priority}"
+        return dt
+
+
+    filtered_alerts.sort(
+        key=alert_sort_key,
+        reverse=True,
+    )
+
+
+    if not filtered_alerts:
+
+        st.info(
+            "No live alerts match the selected filters."
+        )
+
+    else:
+
+        for alert in filtered_alerts:
+
+            priority = normalize_status(
+                alert.get("Priority")
             )
 
-            if alert_date:
+            if priority == "CRITICAL":
 
-                meta += (
-                    f" | **Date:** {alert_date}"
+                icon = "🔴"
+
+            elif priority == "URGENT":
+
+                icon = "🟠"
+
+            elif priority == "HIGH":
+
+                icon = "🟡"
+
+            elif priority == "MEDIUM":
+
+                icon = "🔵"
+
+            else:
+
+                icon = "⚪"
+
+
+            title = alert.get(
+                "Title",
+                "System Alert",
+            )
+
+            message = alert.get(
+                "Message",
+                "",
+            )
+
+            created_at = alert.get(
+                "Created_At"
+            )
+
+            task_name = alert.get(
+                "Task_Name",
+                "",
+            )
+
+            task_id = alert.get(
+                "Task_ID",
+                "",
+            )
+
+            with st.container(
+                border=True
+            ):
+
+                st.markdown(
+                    f"### {icon} {title}"
                 )
 
-            st.caption(
-                meta
-            )
+                st.write(message)
+
+                detail_parts = []
+
+                if priority:
+                    detail_parts.append(
+                        f"**Priority:** {priority.title()}"
+                    )
+
+                if alert.get("Alert_Type"):
+                    detail_parts.append(
+                        f"**Type:** {alert.get('Alert_Type')}"
+                    )
+
+                if task_name:
+                    detail_parts.append(
+                        f"**Task:** {task_name}"
+                    )
+
+                elif task_id:
+                    detail_parts.append(
+                        f"**Task ID:** {task_id}"
+                    )
+
+                if created_at:
+                    detail_parts.append(
+                        f"**Date:** {format_datetime(created_at)}"
+                    )
+
+                if detail_parts:
+
+                    st.caption(
+                        " | ".join(detail_parts)
+                    )
 
 
-# ==========================================================
+# ============================================================
 # REFRESH
-# ==========================================================
+# ============================================================
 
 st.divider()
 
+refresh_col1, refresh_col2 = st.columns(
+    [1, 5]
+)
 
-if st.button(
-    "🔄 Refresh Notifications",
-    use_container_width=True,
-    key="refresh_notifications"
-):
+with refresh_col1:
 
-    st.rerun()
+    if st.button(
+        "🔄 Refresh",
+        use_container_width=True,
+    ):
+
+        st.rerun()
+
+with refresh_col2:
+
+    st.caption(
+        "Notifications and live alerts are loaded from the configured Google Sheets."
+    )
 
 
-# ==========================================================
+# ============================================================
 # FOOTER
-# ==========================================================
+# ============================================================
 
 st.divider()
 
 st.caption(
-    "MSU / EPID Health Coordinator Monitoring System "
-    "| Notifications"
+    f"MSU/EPID Health Coordinator Monitoring System • "
+    f"Notifications • "
+    f"{datetime.now(IST).strftime('%d-%m-%Y %H:%M')}"
 )
