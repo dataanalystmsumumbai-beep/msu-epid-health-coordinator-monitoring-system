@@ -6,16 +6,16 @@ from core.navigation import require_login
 from config.config import (
     ROLE_DEVELOPER,
     ROLE_ADMIN,
-    ROLE_COORDINATOR
+    ROLE_COORDINATOR,
 )
 
 from services.task_assignment_service import (
-    TaskAssignmentService
+    TaskAssignmentService,
 )
 
 try:
     from services.daily_review_service import (
-        DailyReviewService
+        DailyReviewService,
     )
 except Exception:
     DailyReviewService = None
@@ -28,7 +28,7 @@ except Exception:
 st.set_page_config(
     page_title="Reports Dashboard",
     page_icon="📊",
-    layout="wide"
+    layout="wide",
 )
 
 
@@ -36,11 +36,13 @@ st.set_page_config(
 # ACCESS
 # ==========================================================
 
-require_login([
-    ROLE_DEVELOPER,
-    ROLE_ADMIN,
-    ROLE_COORDINATOR
-])
+require_login(
+    [
+        ROLE_DEVELOPER,
+        ROLE_ADMIN,
+        ROLE_COORDINATOR,
+    ]
+)
 
 
 # ==========================================================
@@ -50,21 +52,21 @@ require_login([
 current_role = str(
     st.session_state.get(
         "role",
-        ""
+        "",
     )
 ).strip()
 
 current_user_id = str(
     st.session_state.get(
         "user_id",
-        ""
+        "",
     )
 ).strip()
 
 current_username = str(
     st.session_state.get(
         "username",
-        ""
+        "",
     )
 ).strip()
 
@@ -74,7 +76,6 @@ current_username = str(
 # ==========================================================
 
 def clean(value):
-
     if value is None:
         return ""
 
@@ -82,19 +83,16 @@ def clean(value):
 
 
 def get_value(row, *keys):
-
     if not row:
         return ""
 
     for key in keys:
-
         value = row.get(
             key,
-            ""
+            "",
         )
 
         if value is not None:
-
             value = clean(value)
 
             if value != "":
@@ -104,13 +102,12 @@ def get_value(row, *keys):
 
 
 def normalize_status(value):
-
     value = clean(value).lower()
 
     if value in [
         "completed",
         "complete",
-        "done"
+        "done",
     ]:
         return "Completed"
 
@@ -118,14 +115,14 @@ def normalize_status(value):
         "in progress",
         "in-progress",
         "ongoing",
-        "working"
+        "working",
     ]:
         return "In Progress"
 
     if value in [
         "pending",
         "not started",
-        "not_started"
+        "not_started",
     ]:
         return "Pending"
 
@@ -133,17 +130,13 @@ def normalize_status(value):
 
 
 def load_assignments():
-
     try:
-
         return (
             TaskAssignmentService
             .get_all_assignments()
             or []
         )
-
     except Exception:
-
         return []
 
 
@@ -156,7 +149,7 @@ def load_reviews():
 
         if hasattr(
             DailyReviewService,
-            "get_all_reviews"
+            "get_all_reviews",
         ):
 
             return (
@@ -167,7 +160,7 @@ def load_reviews():
 
         if hasattr(
             DailyReviewService,
-            "get_all"
+            "get_all",
         ):
 
             return (
@@ -198,33 +191,25 @@ reviews = load_reviews()
 if current_role.lower() == "coordinator":
 
     assignments = [
-
         row
-
         for row in assignments
-
         if get_value(
             row,
             "Coordinator_ID",
-            "Coordinator_Id"
+            "Coordinator_Id",
         )
         == current_user_id
-
     ]
 
     reviews = [
-
         row
-
         for row in reviews
-
         if get_value(
             row,
             "Coordinator_ID",
-            "Coordinator_Id"
+            "Coordinator_Id",
         )
         == current_user_id
-
     ]
 
 
@@ -233,23 +218,19 @@ if current_role.lower() == "coordinator":
 # ==========================================================
 
 active_assignments = [
-
     row
-
     for row in assignments
-
     if normalize_status(
         get_value(
             row,
-            "Status"
+            "Status",
         )
     )
     not in [
         "Removed",
         "Deleted",
-        "Inactive"
+        "Inactive",
     ]
-
 ]
 
 
@@ -262,64 +243,49 @@ total_tasks = len(
 )
 
 pending_tasks = sum(
-
     1
-
     for row in active_assignments
-
     if normalize_status(
         get_value(
             row,
-            "Status"
+            "Status",
         )
     )
     == "Pending"
-
 )
 
 in_progress_tasks = sum(
-
     1
-
     for row in active_assignments
-
     if normalize_status(
         get_value(
             row,
-            "Status"
+            "Status",
         )
     )
     == "In Progress"
-
 )
 
 completed_tasks = sum(
-
     1
-
     for row in active_assignments
-
     if normalize_status(
         get_value(
             row,
-            "Status"
+            "Status",
         )
     )
     == "Completed"
-
 )
 
 
 if total_tasks:
-
     completion_percentage = (
         completed_tasks
         / total_tasks
         * 100
     )
-
 else:
-
     completion_percentage = 0
 
 
@@ -332,54 +298,42 @@ total_reviews = len(
 )
 
 completed_reviews = sum(
-
     1
-
     for row in reviews
-
     if normalize_status(
         get_value(
             row,
             "Status",
-            "Review_Status"
+            "Review_Status",
         )
     )
     == "Completed"
-
 )
 
 pending_reviews = sum(
-
     1
-
     for row in reviews
-
     if normalize_status(
         get_value(
             row,
             "Status",
-            "Review_Status"
+            "Review_Status",
         )
     )
     == "Pending"
-
 )
 
 in_progress_reviews = sum(
-
     1
-
     for row in reviews
-
     if normalize_status(
         get_value(
             row,
             "Status",
-            "Review_Status"
+            "Review_Status",
         )
     )
     == "In Progress"
-
 )
 
 
@@ -409,7 +363,7 @@ with c1:
 
     st.metric(
         "📋 Total Tasks",
-        total_tasks
+        total_tasks,
     )
 
 
@@ -417,7 +371,7 @@ with c2:
 
     st.metric(
         "⏳ Pending",
-        pending_tasks
+        pending_tasks,
     )
 
 
@@ -425,7 +379,7 @@ with c3:
 
     st.metric(
         "🔄 In Progress",
-        in_progress_tasks
+        in_progress_tasks,
     )
 
 
@@ -433,7 +387,7 @@ with c4:
 
     st.metric(
         "✅ Completed",
-        completed_tasks
+        completed_tasks,
     )
 
 
@@ -441,7 +395,7 @@ with c5:
 
     st.metric(
         "📈 Completion",
-        f"{completion_percentage:.1f}%"
+        f"{completion_percentage:.1f}%",
     )
 
 
@@ -462,13 +416,13 @@ task_chart = pd.DataFrame(
         "Status": [
             "Pending",
             "In Progress",
-            "Completed"
+            "Completed",
         ],
         "Count": [
             pending_tasks,
             in_progress_tasks,
-            completed_tasks
-        ]
+            completed_tasks,
+        ],
     }
 )
 
@@ -479,7 +433,7 @@ if total_tasks:
         task_chart.set_index(
             "Status"
         ),
-        use_container_width=True
+        use_container_width=True,
     )
 
 else:
@@ -508,7 +462,7 @@ with r1:
 
     st.metric(
         "Total Reviews",
-        total_reviews
+        total_reviews,
     )
 
 
@@ -516,7 +470,7 @@ with r2:
 
     st.metric(
         "Pending Reviews",
-        pending_reviews
+        pending_reviews,
     )
 
 
@@ -524,7 +478,7 @@ with r3:
 
     st.metric(
         "In Progress",
-        in_progress_reviews
+        in_progress_reviews,
     )
 
 
@@ -532,7 +486,7 @@ with r4:
 
     st.metric(
         "Completed Reviews",
-        completed_reviews
+        completed_reviews,
     )
 
 
@@ -541,13 +495,13 @@ review_chart = pd.DataFrame(
         "Status": [
             "Pending",
             "In Progress",
-            "Completed"
+            "Completed",
         ],
         "Count": [
             pending_reviews,
             in_progress_reviews,
-            completed_reviews
-        ]
+            completed_reviews,
+        ],
     }
 )
 
@@ -558,7 +512,7 @@ if total_reviews:
         review_chart.set_index(
             "Status"
         ),
-        use_container_width=True
+        use_container_width=True,
     )
 
 else:
@@ -591,63 +545,63 @@ for row in active_assignments:
                 get_value(
                     row,
                     "Assignment_ID",
-                    "Assignment_Id"
+                    "Assignment_Id",
                 ),
 
             "Coordinator ID":
                 get_value(
                     row,
                     "Coordinator_ID",
-                    "Coordinator_Id"
+                    "Coordinator_Id",
                 ),
 
             "Task ID":
                 get_value(
                     row,
                     "Task_ID",
-                    "Task_Id"
+                    "Task_Id",
                 ),
 
             "Assigned By":
                 get_value(
                     row,
                     "Assigned_By",
-                    "AssignedBy"
+                    "AssignedBy",
                 ),
 
             "Assigned Date":
                 get_value(
                     row,
                     "Assigned_Date",
-                    "Assigned Date"
+                    "Assigned Date",
                 ),
 
             "Due Date":
                 get_value(
                     row,
                     "Due_Date",
-                    "Due Date"
+                    "Due Date",
                 ),
 
             "Priority":
                 get_value(
                     row,
-                    "Priority"
+                    "Priority",
                 ),
 
             "Status":
                 normalize_status(
                     get_value(
                         row,
-                        "Status"
+                        "Status",
                     )
                 ),
 
             "Remarks":
                 get_value(
                     row,
-                    "Remarks"
-                )
+                    "Remarks",
+                ),
         }
     )
 
@@ -661,7 +615,7 @@ if assignment_rows:
     st.dataframe(
         assignment_df,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
     )
 
 else:
@@ -695,21 +649,21 @@ for row in reviews:
                     row,
                     "Review_Date",
                     "Review Date",
-                    "Date"
+                    "Date",
                 ),
 
             "Coordinator ID":
                 get_value(
                     row,
                     "Coordinator_ID",
-                    "Coordinator_Id"
+                    "Coordinator_Id",
                 ),
 
             "Task ID":
                 get_value(
                     row,
                     "Task_ID",
-                    "Task_Id"
+                    "Task_Id",
                 ),
 
             "Status":
@@ -717,7 +671,7 @@ for row in reviews:
                     get_value(
                         row,
                         "Status",
-                        "Review_Status"
+                        "Review_Status",
                     )
                 ),
 
@@ -726,7 +680,7 @@ for row in reviews:
                     row,
                     "Progress",
                     "Progress_Update",
-                    "Update"
+                    "Update",
                 ),
 
             "Remarks":
@@ -734,8 +688,8 @@ for row in reviews:
                     row,
                     "Remarks",
                     "Comment",
-                    "Comments"
-                )
+                    "Comments",
+                ),
         }
     )
 
@@ -749,7 +703,7 @@ if review_rows:
     st.dataframe(
         review_df,
         use_container_width=True,
-        hide_index=True
+        hide_index=True,
     )
 
 else:
@@ -773,41 +727,47 @@ st.subheader(
 
 if assignment_rows:
 
-    csv_data = pd.DataFrame(
-        assignment_rows
-    ).to_csv(
-        index=False
-    ).encode(
-        "utf-8"
+    csv_data = (
+        pd.DataFrame(
+            assignment_rows
+        )
+        .to_csv(
+            index=False
+        )
+        .encode(
+            "utf-8"
+        )
     )
-
 
     st.download_button(
         "📥 Download Task Report",
         data=csv_data,
         file_name="Task_Monitoring_Report.csv",
         mime="text/csv",
-        use_container_width=True
+        use_container_width=True,
     )
 
 
 if review_rows:
 
-    review_csv = pd.DataFrame(
-        review_rows
-    ).to_csv(
-        index=False
-    ).encode(
-        "utf-8"
+    review_csv = (
+        pd.DataFrame(
+            review_rows
+        )
+        .to_csv(
+            index=False
+        )
+        .encode(
+            "utf-8"
+        )
     )
-
 
     st.download_button(
         "📥 Download Daily Review Report",
         data=review_csv,
         file_name="Daily_Review_Report.csv",
         mime="text/csv",
-        use_container_width=True
+        use_container_width=True,
     )
 
 
@@ -820,7 +780,7 @@ st.divider()
 
 if st.button(
     "🔄 Refresh Dashboard",
-    use_container_width=True
+    use_container_width=True,
 ):
 
     st.rerun()
@@ -831,5 +791,6 @@ if st.button(
 # ==========================================================
 
 st.caption(
-    "Reports Dashboard • Coordinator Monitoring & Task Management System"
+    "Reports Dashboard • "
+    "Coordinator Monitoring & Task Management System"
 )
