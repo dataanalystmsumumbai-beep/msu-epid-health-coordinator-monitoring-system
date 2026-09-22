@@ -71,26 +71,35 @@ st.divider()
 
 
 # ==========================================================
-# PRIMARY SUPPORT CONTACT
+# SUPPORT INTRODUCTION
 # ==========================================================
 
-st.subheader("👨‍💻 Need Technical Support?")
+st.subheader("🆘 Need Help?")
 
 st.success(
     """
-    If you experience a technical issue with this portal,
-    please **contact the Data Analyst / designated system support person**.
+    If you are facing a technical or operational issue with the
+    portal, please first check the **Help Center** and
+    **System Manual**.
+
+    If the issue continues, please contact the
+    **Authorised Person / Developer** responsible for system support.
     """
 )
+
+
+# ==========================================================
+# SUPPORT CONTACT GUIDANCE
+# ==========================================================
 
 c1, c2, c3 = st.columns(3)
 
 with c1:
 
-    st.markdown("### 👤 Support Person")
+    st.markdown("### 👤 Support")
 
     st.write(
-        "**Data Analyst**"
+        "**Authorised Person / Developer**"
     )
 
 with c2:
@@ -112,10 +121,9 @@ with c3:
 
 st.info(
     """
-    **Recommended:** Before contacting the Data Analyst,
-    first check the **Help Center** and **System Manual**.
-    If the issue continues, share the issue details and screenshot
-    with the Data Analyst.
+    **Before contacting support:** Refresh the page, check the
+    Help Center and System Manual, and collect the relevant
+    Task / Assignment / Review information.
     """
 )
 
@@ -127,7 +135,7 @@ st.divider()
 # INFORMATION TO SHARE
 # ==========================================================
 
-st.subheader("📋 Information to Share with the Data Analyst")
+st.subheader("📋 Information to Share with Support")
 
 st.markdown(
     """
@@ -161,9 +169,10 @@ with st.expander("🔐 Login Problem"):
         """
         Check that the username and password are correct.
 
-        If the problem continues, contact the **Data Analyst /
-        designated system support person** and provide the username
-        and screenshot of the issue.
+        If the problem continues, contact the
+        **Authorised Person / Developer** responsible for
+        system support and provide the username and screenshot
+        of the issue.
         """
     )
 
@@ -172,13 +181,14 @@ with st.expander("📋 Task is Not Visible"):
 
     st.write(
         """
-        Check whether the task has been assigned to the logged-in
-        Coordinator.
+        Check whether the task has been assigned to the
+        logged-in Coordinator.
 
         Verify the Coordinator ID and Task ID.
 
-        If the task is still not visible, contact the **Data Analyst**
-        with the Task ID / Assignment ID and screenshot.
+        If the task is still not visible, contact the
+        **Authorised Person / Developer** with the relevant
+        Task ID / Assignment ID and screenshot.
         """
     )
 
@@ -195,8 +205,9 @@ with st.expander("📝 Daily Review Cannot Be Submitted"):
         4. The status is selected.
         5. Required progress / remarks are entered.
 
-        If the issue continues, contact the **Data Analyst**.
-        """ 
+        If the issue continues, contact the
+        **Authorised Person / Developer**.
+        """
     )
 
 
@@ -210,7 +221,7 @@ with st.expander("👥 User Management Issue"):
         while Coordinators have limited access.
 
         If you believe that your access or permissions are incorrect,
-        contact the **Data Analyst / designated system support person**.
+        contact the **Authorised Person / Developer**.
         """
     )
 
@@ -225,7 +236,7 @@ with st.expander("🔔 Notification Issue"):
         correctly recorded.
 
         If notifications are still not appearing correctly,
-        contact the **Data Analyst**.
+        contact the **Authorised Person / Developer**.
         """
     )
 
@@ -240,8 +251,9 @@ with st.expander("📊 Dashboard Data Not Updated"):
         related Task Assignment or Daily Review was successfully
         submitted.
 
-        If the problem continues, contact the **Data Analyst** and
-        provide the relevant Task ID / Assignment ID.
+        If the problem continues, contact the
+        **Authorised Person / Developer** and provide the relevant
+        Task ID / Assignment ID.
         """
     )
 
@@ -253,11 +265,12 @@ st.divider()
 # REPORT AN ISSUE
 # ==========================================================
 
-st.subheader("✉️ Prepare a Support Request")
+st.subheader("✉️ Report an Issue")
 
 st.caption(
-    "Complete the details below before contacting the Data Analyst."
+    "Prepare the issue details before contacting the Authorised Person / Developer."
 )
+
 
 with st.form("support_request_form"):
 
@@ -275,10 +288,12 @@ with st.form("support_request_form"):
         ]
     )
 
+
     issue_subject = st.text_input(
         "Issue Subject",
         placeholder="Example: Daily Review submission error"
     )
+
 
     issue_description = st.text_area(
         "Describe the Issue",
@@ -289,10 +304,12 @@ with st.form("support_request_form"):
         )
     )
 
+
     reference_id = st.text_input(
         "Task / Assignment / Review ID (if applicable)",
         placeholder="Example: TASK-001"
     )
+
 
     screenshot_available = st.radio(
         "Screenshot Available?",
@@ -303,11 +320,13 @@ with st.form("support_request_form"):
         horizontal=True
     )
 
+
     submitted = st.form_submit_button(
         "📨 Prepare Support Details",
         type="primary",
         use_container_width=True
     )
+
 
     if submitted:
 
@@ -326,10 +345,12 @@ with st.form("support_request_form"):
         else:
 
             st.success(
-                "Support details are ready to share with the Data Analyst."
+                "Support details are ready to share with the Authorised Person / Developer."
             )
 
-            st.markdown("### 📋 Support Summary")
+            st.markdown(
+                "### 📋 Support Summary"
+            )
 
             summary_data = {
                 "Parameter": [
@@ -341,13 +362,22 @@ with st.form("support_request_form"):
                     "Screenshot Available"
                 ],
                 "Value": [
-                    current_username,
-                    current_role,
+                    current_username
+                    if current_username
+                    else "Not Available",
+
+                    current_role
+                    if current_role
+                    else "Not Available",
+
                     issue_type,
+
                     issue_subject.strip(),
+
                     reference_id.strip()
                     if reference_id.strip()
                     else "Not Applicable",
+
                     screenshot_available
                 ]
             }
@@ -358,7 +388,10 @@ with st.form("support_request_form"):
                 hide_index=True
             )
 
-            st.markdown("### 📝 Issue Description")
+
+            st.markdown(
+                "### 📝 Issue Description"
+            )
 
             st.info(
                 issue_description.strip()
@@ -367,8 +400,7 @@ with st.form("support_request_form"):
             st.warning(
                 """
                 Please share the above information and any relevant
-                screenshot with the **Data Analyst / designated system
-                support person**.
+                screenshot with the **Authorised Person / Developer**.
                 """
             )
 
@@ -380,7 +412,7 @@ st.divider()
 # SUPPORT CHECKLIST
 # ==========================================================
 
-st.subheader("✅ Before Contacting the Data Analyst")
+st.subheader("✅ Before Contacting Support")
 
 checklist = [
     "Refresh the page.",
@@ -392,6 +424,7 @@ checklist = [
     "Record the exact error message.",
     "Take a screenshot of the problem."
 ]
+
 
 for index, item in enumerate(checklist):
 
@@ -421,7 +454,7 @@ support_flow = {
         "Refresh and re-check the page",
         "Check Help Center / System Manual",
         "Prepare issue details and screenshot",
-        "Contact the Data Analyst"
+        "Contact Authorised Person / Developer"
     ]
 }
 
@@ -460,9 +493,50 @@ st.divider()
 st.success(
     """
     🟢 For technical or portal-related issues, please contact the
-    **Data Analyst / designated system support person** with the
-    relevant issue details and screenshot.
+    **Authorised Person / Developer** responsible for system support.
     """
+)
+
+
+st.divider()
+
+
+# ==========================================================
+# APPLICATION CREDIT
+# ==========================================================
+
+st.markdown(
+    """
+    <div style="
+        text-align: center;
+        padding: 18px;
+        margin-top: 10px;
+    ">
+        <div style="
+            font-size: 14px;
+            color: #666;
+        ">
+            App Made By
+        </div>
+
+        <div style="
+            font-size: 22px;
+            font-weight: 600;
+            margin-top: 4px;
+        ">
+            Data Analyst
+        </div>
+
+        <div style="
+            font-size: 15px;
+            color: #666;
+            margin-top: 2px;
+        ">
+            MSU, Mumbai
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True
 )
 
 
@@ -472,8 +546,4 @@ st.success(
 
 st.caption(
     "Contact Support • Coordinator Monitoring & Task Management System"
-)
-
-st.caption(
-    "Technical Support Contact: Data Analyst"
 )
