@@ -1,11 +1,17 @@
 from uuid import uuid4
 
-from config.config import COORDINATOR_TASK_MAP
+from config.config import (
+    COORDINATOR_TASK_MAP,
+)
 
 from utils.google_sheet import (
     read_all,
     insert_row,
-    update_value
+    update_value,
+)
+
+from services.notification_service import (
+    NotificationService,
 )
 
 
@@ -134,16 +140,15 @@ class TaskAssignmentService:
 
         ]
 
+        # --------------------------------------------------
+        # CREATE ASSIGNMENT
+        # --------------------------------------------------
+
         try:
 
             insert_row(
                 COORDINATOR_TASK_MAP,
                 row
-            )
-
-            return (
-                True,
-                "Task Assigned Successfully."
             )
 
         except Exception as e:
@@ -152,6 +157,78 @@ class TaskAssignmentService:
                 False,
                 f"Unable to assign task: {e}"
             )
+
+
+        # ==================================================
+        # CREATE ONE NOTIFICATION
+        # ==================================================
+        #
+        # IMPORTANT:
+        # Notification is created here, at the time of
+        # assignment.
+        #
+        # The Notifications page should NOT create this
+        # notification again.
+        #
+        # If notification creation fails, the task
+        # assignment remains successful.
+        # ==================================================
+
+        notification_message = (
+            f"Task ID {task_id} has been assigned "
+            f"to you."
+        )
+
+
+        if assigned_by:
+
+            notification_message += (
+                f" Assigned by: {assigned_by}."
+            )
+
+
+        if due_date:
+
+            notification_message += (
+                f" Due date: {due_date}."
+            )
+
+
+        if priority:
+
+            notification_message += (
+                f" Priority: {priority}."
+            )
+
+
+        try:
+
+            NotificationService.create_notification(
+                recipient_id=coordinator_id,
+                title="📋 New Task Assigned",
+                message=notification_message,
+                notification_type="TASK",
+            )
+
+        except Exception:
+
+            # Do NOT fail the task assignment if the
+            # notification write fails.
+            #
+            # This is especially important when Google
+            # Sheets API quota is temporarily exceeded.
+
+            pass
+
+
+        # --------------------------------------------------
+        # Assignment completed
+        # --------------------------------------------------
+
+        return (
+            True,
+            "Task Assigned Successfully."
+        )
 
 
     # ======================================================
@@ -264,12 +341,18 @@ class TaskAssignmentService:
 
             if (
                 existing_coordinator
-                == str(coordinator_id).strip()
+                ==
+                str(
+                    coordinator_id
+                ).strip()
 
                 and
 
                 existing_task
-                == str(task_id).strip()
+                ==
+                str(
+                    task_id
+                ).strip()
 
                 and
 
