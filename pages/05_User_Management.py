@@ -8,7 +8,8 @@ from core.navigation import require_login
 from utils.google_sheet import (
     read_all,
     insert_row,
-    update_value
+    update_value,
+    find_row
 )
 
 from config.config import (
@@ -62,12 +63,15 @@ current_username = str(
 # ==========================================================
 
 def clean(value):
+
     if value is None:
         return ""
+
     return str(value).strip()
 
 
 def hash_password(password):
+
     return hashlib.sha256(
         password.encode("utf-8")
     ).hexdigest()
@@ -100,6 +104,7 @@ def can_manage_user(target_role):
     ).lower()
 
     if current == "developer":
+
         return target_role in [
             "developer",
             "admin",
@@ -107,6 +112,7 @@ def can_manage_user(target_role):
         ]
 
     if current == "admin":
+
         return target_role == "coordinator"
 
     return False
@@ -117,6 +123,38 @@ def can_disable_user(target_role):
     return can_manage_user(
         target_role
     )
+
+
+def get_user_row_number(user_id):
+
+    """
+    Find the actual Google Sheet row number
+    using User_ID.
+
+    Google Sheet:
+    Row 1 = Header
+    Row 2 onward = User records
+    """
+
+    try:
+
+        result = find_row(
+            USERS,
+            "User_ID",
+            user_id
+        )
+
+        if result:
+
+            row_number, record = result
+
+            return int(row_number)
+
+    except Exception:
+
+        pass
+
+    return 0
 
 
 # ==========================================================
@@ -208,25 +246,33 @@ coordinators = [
 
 c1, c2, c3, c4 = st.columns(4)
 
+
 with c1:
+
     st.metric(
         "👥 Total Users",
         len(users)
     )
 
+
 with c2:
+
     st.metric(
         "👨‍💻 Developers",
         len(developers)
     )
 
+
 with c3:
+
     st.metric(
         "🧑‍💼 Admins",
         len(admins)
     )
 
+
 with c4:
+
     st.metric(
         "👨‍⚕️ Coordinators",
         len(coordinators)
@@ -280,13 +326,14 @@ with tab_users:
         [
             "All",
             "ACTIVE",
-            "DISABLED"
+            "INACTIVE"
         ],
         key="status_filter"
     )
 
 
     filtered_users = []
+
 
     for user in users:
 
@@ -347,6 +394,7 @@ with tab_users:
 
 
     rows = []
+
 
     for user in filtered_users:
 
@@ -464,6 +512,7 @@ with tab_create:
         "Coordinator"
     ]
 
+
     if current_role.lower() == "developer":
 
         new_role_options = [
@@ -480,6 +529,7 @@ with tab_create:
 
 
     col1, col2 = st.columns(2)
+
 
     with col1:
 
@@ -584,6 +634,7 @@ with tab_create:
 
                 existing_ids = []
 
+
                 for user in users:
 
                     uid = get_value(
@@ -593,7 +644,10 @@ with tab_create:
                     )
 
                     if uid:
-                        existing_ids.append(uid)
+
+                        existing_ids.append(
+                            uid
+                        )
 
 
                 if new_role.lower() == "admin":
@@ -609,6 +663,7 @@ with tab_create:
                     len(existing_ids)
                     + 1
                 )
+
 
                 new_user_id = (
                     f"{prefix}{numeric_part:03d}"
@@ -695,6 +750,7 @@ with tab_actions:
 
     manageable_users = []
 
+
     for user in users:
 
         target_role = get_value(
@@ -707,6 +763,7 @@ with tab_actions:
             "User_ID",
             "User_Id"
         )
+
 
         if not target_user_id:
 
@@ -743,6 +800,7 @@ with tab_actions:
 
         user_options = {}
 
+
         for user in manageable_users:
 
             uid = get_value(
@@ -766,6 +824,7 @@ with tab_actions:
                 "Full_Name",
                 "Full Name"
             )
+
 
             user_options[
                 uid
@@ -837,6 +896,15 @@ with tab_actions:
 
 
         # ==================================================
+        # FIND ACTUAL GOOGLE SHEET ROW
+        # ==================================================
+
+        row_number = get_user_row_number(
+            selected_user_id
+        )
+
+
+        # ==================================================
         # PASSWORD RESET
         # ==================================================
 
@@ -881,6 +949,12 @@ with tab_actions:
                     "Passwords do not match."
                 )
 
+            elif row_number <= 1:
+
+                st.error(
+                    "Unable to find the selected user's Google Sheet row."
+                )
+
             else:
 
                 password_hash = hash_password(
@@ -888,10 +962,8 @@ with tab_actions:
                 )
 
 
-                password_column = 2
-
+                password_column = 3
                 modified_on_column = 16
-
                 modified_by_column = 17
 
 
@@ -899,13 +971,7 @@ with tab_actions:
 
                     update_value(
                         USERS,
-                        selected_user.get(
-                            "_row",
-                            selected_user.get(
-                                "row",
-                                0
-                            )
-                        ),
+                        row_number,
                         password_column,
                         password_hash
                     )
@@ -913,13 +979,7 @@ with tab_actions:
 
                     update_value(
                         USERS,
-                        selected_user.get(
-                            "_row",
-                            selected_user.get(
-                                "row",
-                                0
-                            )
-                        ),
+                        row_number,
                         modified_on_column,
                         datetime.now().strftime(
                             "%d-%m-%Y %H:%M"
@@ -929,13 +989,7 @@ with tab_actions:
 
                     update_value(
                         USERS,
-                        selected_user.get(
-                            "_row",
-                            selected_user.get(
-                                "row",
-                                0
-                            )
-                        ),
+                        row_number,
                         modified_by_column,
                         current_username
                     )
@@ -944,6 +998,7 @@ with tab_actions:
                     st.success(
                         "Password changed successfully."
                     )
+
 
                 except Exception as e:
 
@@ -976,36 +1031,37 @@ with tab_actions:
                     key="disable_selected_user"
                 ):
 
-                    try:
-
-                        row_number = selected_user.get(
-                            "_row",
-                            selected_user.get(
-                                "row",
-                                0
-                            )
-                        )
-
-
-                        update_value(
-                            USERS,
-                            row_number,
-                            9,
-                            "DISABLED"
-                        )
-
-
-                        st.success(
-                            "User disabled successfully."
-                        )
-
-                        st.rerun()
-
-                    except Exception as e:
+                    if row_number <= 1:
 
                         st.error(
-                            f"Unable to disable user: {e}"
+                            "Unable to find the selected user's Google Sheet row."
                         )
+
+                    else:
+
+                        try:
+
+                            update_value(
+                                USERS,
+                                row_number,
+                                9,
+                                "INACTIVE"
+                            )
+
+
+                            st.success(
+                                "User disabled successfully."
+                            )
+
+                            st.rerun()
+
+
+                        except Exception as e:
+
+                            st.error(
+                                f"Unable to disable user: {e}"
+                            )
+
 
             else:
 
@@ -1015,33 +1071,33 @@ with tab_actions:
                     key="enable_selected_user"
                 ):
 
-                    try:
-
-                        row_number = selected_user.get(
-                            "_row",
-                            selected_user.get(
-                                "row",
-                                0
-                            )
-                        )
-
-
-                        update_value(
-                            USERS,
-                            row_number,
-                            9,
-                            "ACTIVE"
-                        )
-
-
-                        st.success(
-                            "User enabled successfully."
-                        )
-
-                        st.rerun()
-
-                    except Exception as e:
+                    if row_number <= 1:
 
                         st.error(
-                            f"Unable to enable user: {e}"
+                            "Unable to find the selected user's Google Sheet row."
                         )
+
+                    else:
+
+                        try:
+
+                            update_value(
+                                USERS,
+                                row_number,
+                                9,
+                                "ACTIVE"
+                            )
+
+
+                            st.success(
+                                "User enabled successfully."
+                            )
+
+                            st.rerun()
+
+
+                        except Exception as e:
+
+                            st.error(
+                                f"Unable to enable user: {e}"
+                            )
