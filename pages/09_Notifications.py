@@ -8,6 +8,7 @@ from config.config import (
     ROLE_COORDINATOR,
     NOTIFICATIONS,
     DAILY_REVIEW,
+    USERS,
 )
 
 from services.notification_service import NotificationService
@@ -38,9 +39,6 @@ IST = ZoneInfo("Asia/Kolkata")
 # ============================================================
 
 def get_current_user():
-    """
-    Supports both session formats used in the project.
-    """
 
     user = st.session_state.get("user")
 
@@ -52,6 +50,7 @@ def get_current_user():
     username = st.session_state.get("username")
 
     if role or user_id or username:
+
         return {
             "Role": role,
             "User_ID": user_id,
@@ -62,18 +61,18 @@ def get_current_user():
 
 
 def get_user_value(user, *keys):
-    """
-    Safely get a value from the current user dictionary.
-    """
 
     if not isinstance(user, dict):
         return ""
 
     for key in keys:
+
         if key in user:
+
             value = user.get(key)
 
             if value is not None and str(value).strip():
+
                 return str(value).strip()
 
     return ""
@@ -82,7 +81,11 @@ def get_user_value(user, *keys):
 current_user = get_current_user()
 
 if not current_user:
-    st.error("🔒 Please login to access Notifications.")
+
+    st.error(
+        "🔒 Please login to access Notifications."
+    )
+
     st.stop()
 
 
@@ -112,7 +115,11 @@ if current_role not in [
     ROLE_ADMIN,
     ROLE_COORDINATOR,
 ]:
-    st.error("🚫 You are not authorized to access Notifications.")
+
+    st.error(
+        "🚫 You are not authorized to access Notifications."
+    )
+
     st.stop()
 
 
@@ -121,12 +128,15 @@ if current_role not in [
 # ============================================================
 
 def clean(value):
+
     if value is None:
         return ""
 
     try:
+
         if value != value:
             return ""
+
     except Exception:
         pass
 
@@ -134,12 +144,17 @@ def clean(value):
 
 
 def get_value(row, *keys):
+
     if not isinstance(row, dict):
         return ""
 
     for key in keys:
+
         if key in row:
-            value = clean(row.get(key))
+
+            value = clean(
+                row.get(key)
+            )
 
             if value:
                 return value
@@ -148,16 +163,22 @@ def get_value(row, *keys):
 
 
 def normalize_status(value):
-    return clean(value).upper().replace("-", "_").replace(" ", "_")
+
+    return (
+        clean(value)
+        .upper()
+        .replace("-", "_")
+        .replace(" ", "_")
+    )
 
 
 def safe_read(sheet_name):
-    """
-    Safely read a Google Sheet.
-    """
 
     try:
-        data = read_all(sheet_name)
+
+        data = read_all(
+            sheet_name
+        )
 
         if data is None:
             return []
@@ -168,19 +189,21 @@ def safe_read(sheet_name):
         return []
 
     except Exception:
+
         return []
 
 
 def parse_datetime(value):
-    """
-    Convert common date/datetime formats to datetime.
-    """
 
     if isinstance(value, datetime):
         return value
 
     if isinstance(value, date):
-        return datetime.combine(value, datetime.min.time())
+
+        return datetime.combine(
+            value,
+            datetime.min.time()
+        )
 
     text = clean(value)
 
@@ -199,24 +222,39 @@ def parse_datetime(value):
     ]
 
     for fmt in formats:
+
         try:
-            return datetime.strptime(text, fmt)
+
+            return datetime.strptime(
+                text,
+                fmt
+            )
+
         except Exception:
+
             continue
 
     return None
 
 
 def format_datetime(value):
+
     dt = parse_datetime(value)
 
     if dt is None:
-        return clean(value) or "Not Mentioned"
 
-    return dt.strftime("%d-%m-%Y %H:%M")
+        return (
+            clean(value)
+            or "Not Mentioned"
+        )
+
+    return dt.strftime(
+        "%d-%m-%Y %H:%M"
+    )
 
 
 def get_priority_value(row):
+
     return get_value(
         row,
         "Priority",
@@ -227,6 +265,7 @@ def get_priority_value(row):
 
 
 def get_task_name(row):
+
     return get_value(
         row,
         "Task_Name",
@@ -238,6 +277,7 @@ def get_task_name(row):
 
 
 def get_task_id(row):
+
     return get_value(
         row,
         "Task_ID",
@@ -247,6 +287,7 @@ def get_task_id(row):
 
 
 def get_coordinator_id(row):
+
     return get_value(
         row,
         "Coordinator_ID",
@@ -256,6 +297,7 @@ def get_coordinator_id(row):
 
 
 def get_assignment_id(row):
+
     return get_value(
         row,
         "Assignment_ID",
@@ -265,77 +307,430 @@ def get_assignment_id(row):
 
 
 # ============================================================
-# LOAD DATA
+# LOAD USERS
+# ============================================================
+
+users = safe_read(
+    USERS
+)
+
+
+# ============================================================
+# GET ACTIVE ADMIN / DEVELOPER USERS
+# ============================================================
+
+def get_management_users():
+
+    management_users = []
+
+    for user in users:
+
+        role = get_value(
+            user,
+            "Role"
+        )
+
+        status = normalize_status(
+            get_value(
+                user,
+                "Status"
+            )
+        )
+
+        user_id = get_value(
+            user,
+            "User_ID",
+            "User_Id",
+            "user_id"
+        )
+
+        if not user_id:
+            continue
+
+        if role not in [
+            ROLE_DEVELOPER,
+            ROLE_ADMIN,
+        ]:
+
+            continue
+
+        if status not in [
+            "ACTIVE",
+            "ACTIVATED",
+        ]:
+
+            continue
+
+        management_users.append(
+            user_id
+        )
+
+    return management_users
+
+
+# ============================================================
+# LOAD ASSIGNMENTS
 # ============================================================
 
 assignment_service = TaskAssignmentService()
 
 try:
-    assignments = assignment_service.get_all_assignments()
+
+    assignments = (
+        assignment_service
+        .get_all_assignments()
+    )
+
 except Exception:
+
     assignments = []
+
 
 if not isinstance(assignments, list):
+
     assignments = []
 
 
-# ------------------------------------------------------------
-# IMPORTANT:
-# Correct Daily Review sheet is 05_Daily_Review.
-# Do NOT use 06_Daily_Review because 06 is Login History.
-# ------------------------------------------------------------
-
-reviews = safe_read(DAILY_REVIEW)
-
-# Fallback using the exact project sheet name.
-if not reviews:
-    reviews = safe_read("05_Daily_Review")
-
-
-# Persistent notifications
-persistent_notifications = safe_read(NOTIFICATIONS)
-
-
 # ============================================================
-# PAGE HEADER
+# LOAD DAILY REVIEWS
 # ============================================================
 
-st.title("🔔 Notifications")
-
-st.caption(
-    "View system notifications, task alerts, deadlines and Daily Review updates."
+reviews = safe_read(
+    DAILY_REVIEW
 )
 
-st.divider()
+if not reviews:
 
-
-# ============================================================
-# USER INFORMATION
-# ============================================================
-
-user_col1, user_col2, user_col3 = st.columns(3)
-
-with user_col1:
-    st.metric(
-        "Current User",
-        current_username or "Not Mentioned",
-    )
-
-with user_col2:
-    st.metric(
-        "Role",
-        current_role or "Not Mentioned",
-    )
-
-with user_col3:
-    st.metric(
-        "User ID",
-        current_user_id or "Not Mentioned",
+    reviews = safe_read(
+        "05_Daily_Review"
     )
 
 
 # ============================================================
-# BUILD LIVE SYSTEM ALERTS
+# LOAD EXISTING NOTIFICATIONS
+# ============================================================
+
+persistent_notifications = (
+    safe_read(
+        NOTIFICATIONS
+    )
+)
+
+
+# ============================================================
+# AUTOMATIC NOTIFICATION SYNC
+# ============================================================
+#
+# IMPORTANT:
+# Task Assignment Service currently creates the assignment
+# but does not create a notification.
+#
+# This section creates the missing notification when the
+# Notifications page is opened.
+#
+# Duplicate notifications are prevented by checking:
+# Recipient_ID + Title + Message
+# ============================================================
+
+def notification_exists(
+    notifications,
+    recipient_id,
+    title,
+    message,
+):
+
+    recipient_id = clean(
+        recipient_id
+    )
+
+    title = clean(
+        title
+    )
+
+    message = clean(
+        message
+    )
+
+    for notification in notifications:
+
+        existing_recipient = get_value(
+            notification,
+            "Recipient_ID",
+            "Recipient ID",
+            "recipient_id",
+        )
+
+        existing_title = get_value(
+            notification,
+            "Title",
+        )
+
+        existing_message = get_value(
+            notification,
+            "Message",
+        )
+
+        if (
+            existing_recipient
+            == recipient_id
+            and
+            existing_title
+            == title
+            and
+            existing_message
+            == message
+        ):
+
+            return True
+
+    return False
+
+
+# ============================================================
+# 1. CREATE TASK ASSIGNMENT NOTIFICATIONS
+# ============================================================
+
+for assignment in assignments:
+
+    coordinator_id = get_coordinator_id(
+        assignment
+    )
+
+    task_id = get_task_id(
+        assignment
+    )
+
+    task_name = get_task_name(
+        assignment
+    )
+
+    assignment_id = get_assignment_id(
+        assignment
+    )
+
+    assigned_by = get_value(
+        assignment,
+        "Assigned_By",
+        "Assigned By",
+    )
+
+    status = normalize_status(
+        get_value(
+            assignment,
+            "Status",
+            "Task_Status",
+            "Assignment_Status",
+        )
+    )
+
+    if not coordinator_id:
+
+        continue
+
+    if not task_id and not task_name:
+
+        continue
+
+    # Do not create notifications for removed assignments.
+
+    if status in [
+        "REMOVED",
+        "INACTIVE",
+        "DELETED",
+    ]:
+
+        continue
+
+
+    title = "📋 New Task Assigned"
+
+    task_display = (
+        task_name
+        or task_id
+        or "Assigned Task"
+    )
+
+
+    message = (
+        f"You have been assigned the task "
+        f"'{task_display}'."
+    )
+
+
+    if task_id:
+
+        message += (
+            f" Task ID: {task_id}."
+        )
+
+
+    if assignment_id:
+
+        message += (
+            f" Assignment ID: {assignment_id}."
+        )
+
+
+    if assigned_by:
+
+        message += (
+            f" Assigned by: {assigned_by}."
+        )
+
+
+    if not notification_exists(
+        persistent_notifications,
+        coordinator_id,
+        title,
+        message,
+    ):
+
+        success, _ = (
+            NotificationService
+            .create_notification(
+                recipient_id=coordinator_id,
+                title=title,
+                message=message,
+                notification_type="TASK",
+            )
+        )
+
+        if success:
+
+            persistent_notifications = (
+                NotificationService
+                .get_all_notifications()
+            )
+
+
+# ============================================================
+# 2. CREATE DAILY REVIEW COMPLETION NOTIFICATIONS
+# ============================================================
+
+management_users = (
+    get_management_users()
+)
+
+
+for review in reviews:
+
+    review_status = normalize_status(
+        get_value(
+            review,
+            "Status",
+            "Review_Status",
+            "Review Status",
+        )
+    )
+
+    if review_status != "COMPLETED":
+
+        continue
+
+
+    review_id = get_value(
+        review,
+        "Review_ID",
+        "Review ID",
+        "review_id",
+    )
+
+    review_task_id = get_task_id(
+        review
+    )
+
+    review_task_name = get_task_name(
+        review
+    )
+
+    review_coordinator = get_value(
+        review,
+        "Coordinator_ID",
+        "Coordinator ID",
+        "coordinator_id",
+    )
+
+    review_date = get_value(
+        review,
+        "Date",
+        "Review_Date",
+        "Review Date",
+    )
+
+
+    task_display = (
+        review_task_name
+        or review_task_id
+        or "Task"
+    )
+
+
+    title = "✅ Daily Review Completed"
+
+
+    message = (
+        f"Daily Review has been completed "
+        f"for {task_display}."
+    )
+
+
+    if review_task_id:
+
+        message += (
+            f" Task ID: {review_task_id}."
+        )
+
+
+    if review_coordinator:
+
+        message += (
+            f" Coordinator ID: {review_coordinator}."
+        )
+
+
+    if review_date:
+
+        message += (
+            f" Review Date: {review_date}."
+        )
+
+
+    if review_id:
+
+        message += (
+            f" Review ID: {review_id}."
+        )
+
+
+    for recipient_id in management_users:
+
+        if not notification_exists(
+            persistent_notifications,
+            recipient_id,
+            title,
+            message,
+        ):
+
+            success, _ = (
+                NotificationService
+                .create_notification(
+                    recipient_id=recipient_id,
+                    title=title,
+                    message=message,
+                    notification_type="REVIEW",
+                )
+            )
+
+            if success:
+
+                persistent_notifications = (
+                    NotificationService
+                    .get_all_notifications()
+                )
+
+
+# ============================================================
+# BUILD LIVE ALERTS
 # ============================================================
 
 live_alerts = []
@@ -351,13 +746,17 @@ def add_live_alert(
     task_name="",
     coordinator_id="",
 ):
+
     live_alerts.append(
         {
             "Alert_Type": alert_type,
             "Title": title,
             "Message": message,
             "Priority": priority or "Normal",
-            "Created_At": created_at or datetime.now(IST),
+            "Created_At": (
+                created_at
+                or datetime.now(IST)
+            ),
             "Task_ID": task_id,
             "Task_Name": task_name,
             "Coordinator_ID": coordinator_id,
@@ -366,24 +765,38 @@ def add_live_alert(
 
 
 # ============================================================
-# TASK ALERTS
+# TASK LIVE ALERTS
 # ============================================================
 
 for assignment in assignments:
 
-    assignment_coordinator = get_coordinator_id(assignment)
+    assignment_coordinator = (
+        get_coordinator_id(
+            assignment
+        )
+    )
 
-    # Coordinator should only see own task alerts.
+
     if current_role == ROLE_COORDINATOR:
+
         if (
             assignment_coordinator
             and current_user_id
-            and assignment_coordinator != current_user_id
+            and
+            assignment_coordinator
+            != current_user_id
         ):
+
             continue
 
-    task_id = get_task_id(assignment)
-    task_name = get_task_name(assignment)
+
+    task_id = get_task_id(
+        assignment
+    )
+
+    task_name = get_task_name(
+        assignment
+    )
 
     status = normalize_status(
         get_value(
@@ -394,7 +807,9 @@ for assignment in assignments:
         )
     )
 
-    priority = get_priority_value(assignment)
+    priority = get_priority_value(
+        assignment
+    )
 
     assignment_date = get_value(
         assignment,
@@ -411,8 +826,9 @@ for assignment in assignments:
         "Due Date",
     )
 
+
     # --------------------------------------------------------
-    # Pending Task
+    # Pending
     # --------------------------------------------------------
 
     if status in [
@@ -420,6 +836,7 @@ for assignment in assignments:
         "ASSIGNED",
         "NOT_STARTED",
     ]:
+
         add_live_alert(
             alert_type="Task",
             title="📋 Pending Task",
@@ -434,8 +851,9 @@ for assignment in assignments:
             coordinator_id=assignment_coordinator,
         )
 
+
     # --------------------------------------------------------
-    # In Progress Task
+    # In Progress
     # --------------------------------------------------------
 
     if status in [
@@ -443,6 +861,7 @@ for assignment in assignments:
         "INPROGRESS",
         "STARTED",
     ]:
+
         add_live_alert(
             alert_type="Task",
             title="🔄 Task In Progress",
@@ -457,15 +876,19 @@ for assignment in assignments:
             coordinator_id=assignment_coordinator,
         )
 
+
     # --------------------------------------------------------
     # High Priority
     # --------------------------------------------------------
 
-    if normalize_status(priority) in [
+    if normalize_status(
+        priority
+    ) in [
         "HIGH",
         "CRITICAL",
         "URGENT",
     ]:
+
         add_live_alert(
             alert_type="Priority",
             title="🚨 High Priority Task",
@@ -480,32 +903,46 @@ for assignment in assignments:
             coordinator_id=assignment_coordinator,
         )
 
+
     # --------------------------------------------------------
-    # Due Date Alert
+    # Due Date
     # --------------------------------------------------------
 
-    due_dt = parse_datetime(due_date)
+    due_dt = parse_datetime(
+        due_date
+    )
 
     if due_dt is not None:
 
-        now_ist = datetime.now(IST)
+        now_ist = datetime.now(
+            IST
+        )
 
         if due_dt.tzinfo is None:
-            due_dt = due_dt.replace(tzinfo=IST)
+
+            due_dt = due_dt.replace(
+                tzinfo=IST
+            )
+
 
         remaining_seconds = (
             due_dt - now_ist
         ).total_seconds()
 
-        # Due within 24 hours
-        if 0 <= remaining_seconds <= 86400:
+
+        if (
+            0
+            <= remaining_seconds
+            <= 86400
+        ):
 
             add_live_alert(
                 alert_type="Deadline",
                 title="⏰ Task Due Soon",
                 message=(
                     f"{task_name or task_id or 'Task'} "
-                    f"is due on {due_dt.strftime('%d-%m-%Y %H:%M')}."
+                    f"is due on "
+                    f"{due_dt.strftime('%d-%m-%Y %H:%M')}."
                 ),
                 priority="Urgent",
                 created_at=due_dt,
@@ -514,19 +951,24 @@ for assignment in assignments:
                 coordinator_id=assignment_coordinator,
             )
 
-        # Already overdue
-        elif remaining_seconds < 0 and status not in [
-            "COMPLETED",
-            "CLOSED",
-            "DONE",
-        ]:
+
+        elif (
+            remaining_seconds < 0
+            and
+            status not in [
+                "COMPLETED",
+                "CLOSED",
+                "DONE",
+            ]
+        ):
 
             add_live_alert(
                 alert_type="Deadline",
                 title="🔴 Overdue Task",
                 message=(
                     f"{task_name or task_id or 'Task'} "
-                    f"was due on {due_dt.strftime('%d-%m-%Y %H:%M')}."
+                    f"was due on "
+                    f"{due_dt.strftime('%d-%m-%Y %H:%M')}."
                 ),
                 priority="Critical",
                 created_at=due_dt,
@@ -537,7 +979,7 @@ for assignment in assignments:
 
 
 # ============================================================
-# DAILY REVIEW ALERTS
+# DAILY REVIEW LIVE ALERTS
 # ============================================================
 
 for review in reviews:
@@ -549,14 +991,19 @@ for review in reviews:
         "coordinator_id",
     )
 
+
     if current_role == ROLE_COORDINATOR:
 
         if (
             review_coordinator
             and current_user_id
-            and review_coordinator != current_user_id
+            and
+            review_coordinator
+            != current_user_id
         ):
+
             continue
+
 
     review_status = normalize_status(
         get_value(
@@ -567,7 +1014,9 @@ for review in reviews:
         )
     )
 
-    review_task_id = get_task_id(review)
+    review_task_id = get_task_id(
+        review
+    )
 
     review_task_name = get_value(
         review,
@@ -582,6 +1031,7 @@ for review in reviews:
         "Review_Date",
         "Review Date",
     )
+
 
     if review_status == "COMPLETED":
 
@@ -598,6 +1048,7 @@ for review in reviews:
             task_name=review_task_name,
             coordinator_id=review_coordinator,
         )
+
 
     elif review_status in [
         "IN_PROGRESS",
@@ -617,6 +1068,7 @@ for review in reviews:
             task_name=review_task_name,
             coordinator_id=review_coordinator,
         )
+
 
     elif review_status in [
         "PENDING",
@@ -641,10 +1093,20 @@ for review in reviews:
 
 
 # ============================================================
-# PERSISTENT NOTIFICATIONS FILTER
+# REFRESH NOTIFICATIONS AFTER SYNC
+# ============================================================
+
+persistent_notifications = safe_read(
+    NOTIFICATIONS
+)
+
+
+# ============================================================
+# FILTER USER NOTIFICATIONS
 # ============================================================
 
 visible_notifications = []
+
 
 for row_index, notification in enumerate(
     persistent_notifications,
@@ -658,76 +1120,169 @@ for row_index, notification in enumerate(
         "recipient_id",
     )
 
+
     if current_role in [
         ROLE_DEVELOPER,
         ROLE_ADMIN,
     ]:
-        visible = True
+
+        # Management users can see management
+        # notifications.
+
+        visible = (
+            recipient_id
+            == current_user_id
+        )
 
     else:
+
         visible = (
-            recipient_id == current_user_id
-            or recipient_id == current_username
+            recipient_id
+            == current_user_id
+            or
+            recipient_id
+            == current_username
         )
+
 
     if not visible:
         continue
 
-    item = dict(notification)
 
-    # Preserve actual Google Sheet row number.
-    item["_sheet_row"] = row_index
+    item = dict(
+        notification
+    )
 
-    visible_notifications.append(item)
+    item["_sheet_row"] = (
+        row_index
+    )
+
+    visible_notifications.append(
+        item
+    )
 
 
 # ============================================================
-# NOTIFICATION COUNTS
+# COUNTS
 # ============================================================
 
 unread_notifications = [
+
     item
+
     for item in visible_notifications
+
     if normalize_status(
         get_value(
             item,
             "Status",
             "Notification_Status",
         )
-    ) == "UNREAD"
+    )
+    == "UNREAD"
+
 ]
 
 
-unread_count = len(unread_notifications)
+unread_count = len(
+    unread_notifications
+)
 
 
-metric1, metric2, metric3 = st.columns(3)
+# ============================================================
+# HEADER
+# ============================================================
 
-with metric1:
+st.title(
+    "🔔 Notifications"
+)
+
+st.caption(
+    "View system notifications, task alerts, deadlines and Daily Review updates."
+)
+
+st.divider()
+
+
+# ============================================================
+# USER INFORMATION
+# ============================================================
+
+user_col1, user_col2, user_col3 = (
+    st.columns(3)
+)
+
+
+with user_col1:
+
     st.metric(
-        "🔔 Notifications",
-        len(visible_notifications),
+        "Current User",
+        current_username
+        or "Not Mentioned",
     )
 
+
+with user_col2:
+
+    st.metric(
+        "Role",
+        current_role
+        or "Not Mentioned",
+    )
+
+
+with user_col3:
+
+    st.metric(
+        "Unread Notifications",
+        unread_count,
+    )
+
+
+# ============================================================
+# SUMMARY
+# ============================================================
+
+st.divider()
+
+
+metric1, metric2, metric3 = (
+    st.columns(3)
+)
+
+
+with metric1:
+
+    st.metric(
+        "🔔 Notifications",
+        len(
+            visible_notifications
+        ),
+    )
+
+
 with metric2:
+
     st.metric(
         "📩 Unread",
         unread_count,
     )
 
+
 with metric3:
+
     st.metric(
         "⚡ Live Alerts",
         len(live_alerts),
     )
 
 
-st.divider()
-
-
 # ============================================================
 # MARK ALL AS READ
 # ============================================================
+
+st.divider()
+
 
 if unread_notifications:
 
@@ -738,14 +1293,23 @@ if unread_notifications:
 
         updated = 0
 
-        for notification in unread_notifications:
 
-            sheet_row = notification.get("_sheet_row")
+        for notification in (
+            unread_notifications
+        ):
+
+            sheet_row = (
+                notification
+                .get("_sheet_row")
+            )
+
 
             if not sheet_row:
                 continue
 
+
             try:
+
                 update_value(
                     NOTIFICATIONS,
                     sheet_row,
@@ -756,7 +1320,9 @@ if unread_notifications:
                 updated += 1
 
             except Exception:
+
                 continue
+
 
         st.success(
             f"✅ {updated} notification(s) marked as read."
@@ -764,16 +1330,22 @@ if unread_notifications:
 
         st.rerun()
 
+
 else:
 
-    st.info("📭 No unread notifications.")
+    st.info(
+        "📭 No unread notifications."
+    )
 
 
 # ============================================================
 # PERSISTENT NOTIFICATIONS
 # ============================================================
 
-st.subheader("📩 Persistent Notifications")
+st.subheader(
+    "📩 Persistent Notifications"
+)
+
 
 if not visible_notifications:
 
@@ -783,7 +1355,9 @@ if not visible_notifications:
 
 else:
 
-    for notification in reversed(visible_notifications):
+    for notification in reversed(
+        visible_notifications
+    ):
 
         title = get_value(
             notification,
@@ -815,21 +1389,33 @@ else:
             "Date",
         )
 
-        sheet_row = notification.get("_sheet_row")
+        sheet_row = (
+            notification
+            .get("_sheet_row")
+        )
+
 
         if status == "UNREAD":
 
-            status_text = "🔵 UNREAD"
+            status_text = (
+                "🔵 UNREAD"
+            )
 
         else:
 
-            status_text = "⚪ READ"
+            status_text = (
+                "⚪ READ"
+            )
 
-        with st.container(border=True):
+
+        with st.container(
+            border=True
+        ):
 
             col1, col2 = st.columns(
                 [5, 1]
             )
+
 
             with col1:
 
@@ -838,28 +1424,41 @@ else:
                 )
 
                 st.write(
-                    message or "No message available."
+                    message
+                    or
+                    "No message available."
                 )
+
 
                 info_parts = []
 
+
                 if notification_type:
+
                     info_parts.append(
                         f"**Type:** {notification_type}"
                     )
 
+
                 if created_at:
+
                     info_parts.append(
-                        f"**Created:** {format_datetime(created_at)}"
+                        f"**Created:** "
+                        f"{format_datetime(created_at)}"
                     )
+
 
                 info_parts.append(
                     f"**Status:** {status_text}"
                 )
 
+
                 st.caption(
-                    " | ".join(info_parts)
+                    " | ".join(
+                        info_parts
+                    )
                 )
+
 
             with col2:
 
@@ -867,7 +1466,10 @@ else:
 
                     if st.button(
                         "✓ Read",
-                        key=f"read_notification_{sheet_row}",
+                        key=(
+                            f"read_notification_"
+                            f"{sheet_row}"
+                        ),
                         use_container_width=True,
                     ):
 
@@ -886,10 +1488,12 @@ else:
 
                             st.rerun()
 
+
                         except Exception as exc:
 
                             st.error(
-                                f"Unable to update notification: {exc}"
+                                "Unable to update "
+                                f"notification: {exc}"
                             )
 
 
@@ -899,7 +1503,11 @@ else:
 
 st.divider()
 
-st.subheader("⚡ Live System Alerts")
+
+st.subheader(
+    "⚡ Live System Alerts"
+)
+
 
 if not live_alerts:
 
@@ -909,11 +1517,10 @@ if not live_alerts:
 
 else:
 
-    # --------------------------------------------------------
-    # FILTERS
-    # --------------------------------------------------------
+    filter_col1, filter_col2 = (
+        st.columns(2)
+    )
 
-    filter_col1, filter_col2 = st.columns(2)
 
     with filter_col1:
 
@@ -928,6 +1535,7 @@ else:
             ],
             key="notification_type_filter",
         )
+
 
     with filter_col2:
 
@@ -948,6 +1556,7 @@ else:
 
     filtered_alerts = []
 
+
     for alert in live_alerts:
 
         if (
@@ -955,22 +1564,32 @@ else:
             and alert.get("Alert_Type")
             != alert_type_filter
         ):
+
             continue
+
 
         if priority_filter != "All":
 
-            if normalize_status(
-                alert.get("Priority")
-            ) != normalize_status(
-                priority_filter
+            if (
+                normalize_status(
+                    alert.get("Priority")
+                )
+                !=
+                normalize_status(
+                    priority_filter
+                )
             ):
+
                 continue
 
-        filtered_alerts.append(alert)
+
+        filtered_alerts.append(
+            alert
+        )
 
 
     # --------------------------------------------------------
-    # SORT
+    # SORT ALERTS
     # --------------------------------------------------------
 
     def alert_sort_key(alert):
@@ -979,15 +1598,20 @@ else:
             alert.get("Created_At")
         )
 
+
         if dt is None:
+
             return datetime.min.replace(
                 tzinfo=IST
             )
 
+
         if dt.tzinfo is None:
+
             dt = dt.replace(
                 tzinfo=IST
             )
+
 
         return dt
 
@@ -1011,6 +1635,7 @@ else:
             priority = normalize_status(
                 alert.get("Priority")
             )
+
 
             if priority == "CRITICAL":
 
@@ -1038,24 +1663,29 @@ else:
                 "System Alert",
             )
 
+
             message = alert.get(
                 "Message",
                 "",
             )
 
+
             created_at = alert.get(
                 "Created_At"
             )
+
 
             task_name = alert.get(
                 "Task_Name",
                 "",
             )
 
+
             task_id = alert.get(
                 "Task_ID",
                 "",
             )
+
 
             with st.container(
                 border=True
@@ -1065,76 +1695,60 @@ else:
                     f"### {icon} {title}"
                 )
 
-                st.write(message)
+
+                st.write(
+                    message
+                )
+
 
                 detail_parts = []
 
+
                 if priority:
+
                     detail_parts.append(
-                        f"**Priority:** {priority.title()}"
+                        f"**Priority:** "
+                        f"{priority.title()}"
                     )
 
-                if alert.get("Alert_Type"):
+
+                if alert.get(
+                    "Alert_Type"
+                ):
+
                     detail_parts.append(
-                        f"**Type:** {alert.get('Alert_Type')}"
+                        f"**Type:** "
+                        f"{alert.get('Alert_Type')}"
                     )
+
 
                 if task_name:
+
                     detail_parts.append(
-                        f"**Task:** {task_name}"
+                        f"**Task:** "
+                        f"{task_name}"
                     )
 
                 elif task_id:
+
                     detail_parts.append(
-                        f"**Task ID:** {task_id}"
+                        f"**Task ID:** "
+                        f"{task_id}"
                     )
 
+
                 if created_at:
+
                     detail_parts.append(
-                        f"**Date:** {format_datetime(created_at)}"
+                        f"**Date:** "
+                        f"{format_datetime(created_at)}"
                     )
+
 
                 if detail_parts:
 
                     st.caption(
-                        " | ".join(detail_parts)
+                        " | ".join(
+                            detail_parts
+                        )
                     )
-
-
-# ============================================================
-# REFRESH
-# ============================================================
-
-st.divider()
-
-refresh_col1, refresh_col2 = st.columns(
-    [1, 5]
-)
-
-with refresh_col1:
-
-    if st.button(
-        "🔄 Refresh",
-        use_container_width=True,
-    ):
-
-        st.rerun()
-
-with refresh_col2:
-
-    st.caption(
-        "Notifications and live alerts are loaded from the configured Google Sheets."
-    )
-
-
-# ============================================================
-# FOOTER
-# ============================================================
-
-st.divider()
-
-st.caption(
-    f"MSU/EPID Health Coordinator Monitoring System • "
-    f"Notifications • "
-    f"{datetime.now(IST).strftime('%d-%m-%Y %H:%M')}"
-)
