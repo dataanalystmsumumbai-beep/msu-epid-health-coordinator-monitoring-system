@@ -187,6 +187,12 @@ if current_role:
         f"🔐 **Role:** {current_role}"
     )
 
+if current_user_id:
+
+    st.write(
+        f"🆔 **User ID:** {current_user_id}"
+    )
+
 
 st.divider()
 
